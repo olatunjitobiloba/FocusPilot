@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FocusPilot</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <h1>FocusPilot</h1>
+    <p>AI Copilot for Your Productivity</p>
+  </div>
+
+  <div id="authView" class="auth-container">
+    <div class="auth-buttons">
+      <button class="btn-login" id="loginBtn">Log In</button>
+      <button class="btn-signup" id="signupBtn">Sign Up</button>
+    </div>
+    <p style="text-align: center; margin-top: 20px; font-size: 12px; opacity: 0.8;">
+      Track your focus time and block distractions
+    </p>
+  </div>
+
+  <div id="dashboardView" class="dashboard">
+    <div class="stat-card">
+      <h3>Today's Focus Time</h3>
+      <div class="value" id="focusTime">0h 0m</div>
+    </div>
+
+    <div class="stat-card">
+      <h3>Current Streak</h3>
+      <div class="value" id="streak">0 days</div>
+    </div>
+
+    <button class="btn-start-session" id="startSessionBtn">
+      Start Focus Session
+    </button>
+
+    <button class="btn-logout" id="logoutBtn">
+      Log Out
+    </button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

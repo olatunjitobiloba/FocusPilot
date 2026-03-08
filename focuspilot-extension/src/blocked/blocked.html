@@ -1,0 +1,107 @@
+<!-- src/blocked/blocked.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Site Blocked - FocusPilot</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #22c55e 0%, #166534 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+    
+    .container {
+      text-align: center;
+      max-width: 600px;
+      padding: 40px;
+    }
+    
+    .icon {
+      font-size: 80px;
+      margin-bottom: 20px;
+    }
+    
+    h1 {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+    
+    p {
+      font-size: 20px;
+      margin-bottom: 30px;
+      opacity: 0.9;
+    }
+    
+    .quote {
+      font-style: italic;
+      font-size: 18px;
+      opacity: 0.8;
+      margin-top: 40px;
+    }
+    
+    .stats {
+      margin-top: 40px;
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+    }
+    
+    .stat {
+      background: rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(10px);
+      padding: 20px;
+      border-radius: 12px;
+      min-width: 120px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      display: block;
+      margin-bottom: 5px;
+    }
+    
+    .stat-label {
+      font-size: 14px;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon"></div>
+    <h1>Stay Focused!</h1>
+    <p>This site is blocked during your focus session.</p>
+    <p>Your future self will thank you.</p>
+    
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-value" id="session-time">00:00</span>
+        <span class="stat-label">Session Time</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value" id="blocks-prevented">0</span>
+        <span class="stat-label">Distractions Blocked</span>
+      </div>
+    </div>
+    
+    <div class="quote">
+      "You don't have to be great to start, but you have to start to be great."
+    </div>
+  </div>
+  
+  <script src="blocked.js"></script>
+</body>
+</html>
