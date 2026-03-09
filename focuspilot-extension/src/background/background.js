@@ -6,13 +6,15 @@ let blockedDomains = [];
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Message received:', message);
+  console.log('Background received message:', message);
   
   if (message.action === 'startSession') {
+    console.log('Starting session with ID:', message.sessionId);
     startSession(message.sessionId, message.token).then(() => {
+      console.log('✓ Session started successfully');
       sendResponse({ success: true });
     }).catch((error) => {
-      console.error('Error starting session:', error);
+      console.error('✗ Error starting session:', error);
       sendResponse({ success: false, error: error.message });
     });
     return true; // Keep channel open for async response
@@ -129,35 +131,79 @@ async function applyBlockingRules() {
     .map(normalizeDomain)
     .filter(Boolean);
 
+  console.log('Normalized domains to block:', normalizedDomains);
+
   // Create blocking rules for each domain
-  const rules = normalizedDomains.map((domain, index) => ({
-    id: index + 1,
-    priority: 1,
-    action: { 
-      type: 'redirect', 
-      redirect: { 
-        url: chrome.runtime.getURL('src/blocked/blocked.html') 
-      } 
+  const rules = normalizedDomains.flatMap((domain, index) => [
+    // Block main domain
+    {
+      id: index * 3 + 1,
+      priority: 1,
+      action: { 
+       type: 'redirect', 
+        redirect: { 
+          url: chrome.runtime.getURL('src/blocked/blocked.html') 
+        } 
+      },
+      condition: {
+        urlFilter: `*://*.${domain}/*`,
+        resourceTypes: ['main_frame']
+      }
     },
-    condition: {
-      urlFilter: `||${domain}^`,
-      resourceTypes: ['main_frame']
+    // Block without www
+    {
+      id: index * 3 + 2,
+      priority: 1,
+      action: { 
+        type: 'redirect', 
+        redirect: { 
+          url: chrome.runtime.getURL('src/blocked/blocked.html') 
+        } 
+      },
+      condition: {
+        urlFilter: `*://${domain}/*`,
+        resourceTypes: ['main_frame']
+      }
+    },
+    // Block root domain
+    {
+      id: index * 3 + 3,
+      priority: 1,
+      action: { 
+        type: 'redirect', 
+        redirect: { 
+          url: chrome.runtime.getURL('src/blocked/blocked.html') 
+        } 
+      },
+      condition: {
+        urlFilter: `*://${domain}`,
+        resourceTypes: ['main_frame']
+      }
     }
-  }));
+  ]);
   
   console.log('Applying blocking rules:', rules);
   
   // Remove old rules first
   const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
   const existingIds = existingRules.map(r => r.id);
+  console.log('Removing existing rules:', existingIds);
   
   // Apply new rules
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: existingIds,
-    addRules: rules
-  });
-  
-  console.log('Blocking rules applied');
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: existingIds,
+      addRules: rules
+    });
+    console.log(`✓ Successfully applied ${rules.length} blocking rules`);
+    
+    // Verify rules were applied
+    const verifyRules = await chrome.declarativeNetRequest.getDynamicRules();
+    console.log('Active blocking rules:', verifyRules);
+  } catch (error) {
+    console.error('Failed to apply blocking rules:', error);
+    throw error;
+  }
 }
 
 // REMOVE BLOCKING RULES
