@@ -20,11 +20,16 @@ def parse_session_datetime(value: str) -> datetime:
 
 def get_elapsed_minutes_from_start(start_time_value) -> int:
     if not start_time_value:
+        print(f"⚠️  start_time_value is None or empty")
         return 0
     try:
+        print(f"📅 Parsing start_time: {start_time_value} (type: {type(start_time_value)})")
         start_time = parse_session_datetime(start_time_value)
-        return max(0, int((datetime.now(timezone.utc) - start_time).total_seconds() / 60))
-    except Exception:
+        elapsed = max(0, int((datetime.now(timezone.utc) - start_time).total_seconds() / 60))
+        print(f"✓ Calculated elapsed minutes: {elapsed}")
+        return elapsed
+    except Exception as e:
+        print(f"❌ Error parsing start_time '{start_time_value}': {e}")
         return 0
 
 
@@ -122,6 +127,8 @@ def get_active_session(user_id: str = Depends(get_current_user_id)):
         return {"active": False, "session": None}
 
     session_data = result.data[0]
+    print(f"📊 Active session data from DB: {session_data}")
+    print(f"📅 start_time from DB: '{session_data.get('start_time')}' (type: {type(session_data.get('start_time'))})")
     elapsed = get_elapsed_minutes_from_start(session_data.get('start_time'))
 
     return {
