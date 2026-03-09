@@ -42,3 +42,19 @@ def remove_from_blocklist(
     supabase.table('blocklist').delete().eq('user_id', user_id).eq('domain', domain).execute()
     
     return {"message": "Removed from blocklist"}
+
+@router.get("/check")
+def check_domain(
+    domain: str,
+    user_id: str = Depends(get_current_user_id)
+):
+    """Check if a domain is in the user's blocklist"""
+    supabase = get_supabase()
+    
+    result = supabase.table('blocklist').select("*")\
+        .eq('user_id', user_id)\
+        .eq('domain', domain)\
+        .execute()
+    
+    is_blocked = len(result.data) > 0
+    return {"domain": domain, "is_blocked": is_blocked}
