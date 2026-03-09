@@ -102,6 +102,9 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     setError('');
     try {
       const activeSession = orphanedSession ?? await getActiveSessionOrThrow();
+      console.log('Resuming session:', activeSession);
+      console.log('Elapsed minutes from backend:', activeSession.elapsed_minutes);
+      console.log('Setting elapsed seconds to:', (activeSession.elapsed_minutes || 0) * 60);
 
       setSessionId(activeSession.id);
       setElapsed((activeSession.elapsed_minutes || 0) * 60);
