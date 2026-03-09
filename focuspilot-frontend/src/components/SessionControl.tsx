@@ -63,6 +63,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
 
   const notifyExtension = (action: 'startSession' | 'endSession', currentSessionId?: string) => {
     const token = localStorage.getItem('token');
+    console.log('Notifying extension:', action, 'Token present?', !!token, token ? `Length: ${token.length}` : 'NO TOKEN');
     window.postMessage(
       {
         source: 'focuspilot-web',

@@ -289,6 +289,19 @@ export default function Dashboard() {
     loadDashboardData(true);
   }, [loadDashboardData]);
 
+  // Sync token to extension on mount
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      console.log('Dashboard: Syncing token to extension');
+      window.postMessage({
+        source: 'focuspilot-web',
+        action: 'syncToken',
+        token
+      }, '*');
+    }
+  }, []);
+
   const recommendations: Recommendation[] = [
     { title: 'Optimal Session Length', text: 'Your best sessions average 32 minutes. Try this duration next time!' },
     { title: 'Your Peak Hour', text: 'You focus best at 17:00 (avg score: 8.0). Schedule important tasks then!' },

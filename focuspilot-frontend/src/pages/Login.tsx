@@ -41,15 +41,13 @@ function Login() {
       localStorage.setItem('token', response.data.access_token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       
-      // IMPORTANT: Also save to Chrome extension storage (if extension exists)
-      if (typeof window.chrome !== 'undefined' && window.chrome?.storage) {
-        window.chrome!.storage!.local.set({ 
-          token: response.data.access_token,
-          user: response.data.user
-        }, () => {
-          console.log('Token saved to extension storage');
-        });
-      }
+      // Sync token to extension
+      window.postMessage({
+        source: 'focuspilot-web',
+        action: 'syncToken',
+        token: response.data.access_token
+      }, '*');
+      console.log('Token sync message sent to extension');
       
       console.log('Navigating to dashboard...'); // DEBUG
       
