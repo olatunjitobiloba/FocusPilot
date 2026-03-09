@@ -10,6 +10,7 @@ window.addEventListener('message', (event) => {
   if (message.action !== 'startSession' && message.action !== 'endSession') return;
 
   console.log('FocusPilot: Forwarding message to background:', message.action, message.sessionId);
+  console.log('FocusPilot: Token present?', !!message.token, message.token ? `Length: ${message.token.length}` : '');
   chrome.runtime.sendMessage({
     action: message.action,
     sessionId: message.sessionId,

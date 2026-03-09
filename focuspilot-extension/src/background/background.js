@@ -42,16 +42,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // START SESSION
 async function startSession(sessionId, tokenFromMessage) {
   console.log('Starting session:', sessionId);
+  console.log('Token from message:', tokenFromMessage ? `${tokenFromMessage.substring(0, 20)}...` : 'null');
   activeSession = sessionId;
   
   // Use token from message (if from web page) or get from storage (if from popup)
   let token = tokenFromMessage || (await getToken());
+  console.log('Final token to use:', token ? `${token.substring(0, 20)}...` : 'null');
   
   if (!token) {
     throw new Error('Not authenticated. Please log in.');
   }
   
   try {
+    console.log('Fetching blocklist from:', `${API_URL}/blocklist/`);
     const response = await fetch(`${API_URL}/blocklist/`, {
       headers: { 
         'Authorization': `Bearer ${token}`,
@@ -59,8 +62,11 @@ async function startSession(sessionId, tokenFromMessage) {
       }
     });
     
+    console.log('Blocklist response status:', response.status);
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Blocklist API error response:', errorText);
+      throw new Error(`API error: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json();
