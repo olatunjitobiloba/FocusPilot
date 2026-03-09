@@ -1,0 +1,30 @@
+# Workspace / editor
+.vscode/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Python cache / bytecode
+**/__pycache__/
+**/*.py[cod]
+*$py.class
+
+# Python virtual environments
+**/.venv/
+**/venv/
+**/env/
+**/ENV/
+
+# Frontend artifacts
+focuspilot-frontend/node_modules/
+focuspilot-frontend/build/
+focuspilot-frontend/.vercel/
+
+# Extension packaging artifacts
+focuspilot-extension/dist/
+focuspilot-extension/*.zip
