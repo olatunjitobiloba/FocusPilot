@@ -5,8 +5,27 @@ from app.database import get_supabase
 from app.domain_whitelist import filter_activities_by_domain
 from datetime import datetime, timedelta
 from collections import defaultdict
+import re
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
+
+
+def parse_iso_datetime(value: str) -> datetime:
+    if not value:
+        raise ValueError("Missing datetime value")
+
+    text = str(value).strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+
+    if "." in text:
+        match = re.match(r"^(.*?\.)(\d+)([+-]\d{2}:?\d{2})?$", text)
+        if match:
+            base, fraction, tz = match.groups()
+            normalized_fraction = (fraction + "000000")[:6]
+            text = f"{base}{normalized_fraction}{tz or ''}"
+
+    return datetime.fromisoformat(text)
 
 @router.get("/")
 def get_recommendations(user_id: str = Depends(get_current_user_id)):
@@ -83,10 +102,17 @@ def get_recommendations(user_id: str = Depends(get_current_user_id)):
         hourly_performance = defaultdict(lambda: {'total_score': 0, 'count': 0})
         
         for session in sessions:
-            if session['focus_score']:
-                hour = datetime.fromisoformat(session['start_time'].replace('Z', '+00:00')).hour
-                hourly_performance[hour]['total_score'] += session['focus_score']
-                hourly_performance[hour]['count'] += 1
+            if not session.get('focus_score'):
+                continue
+
+            try:
+                start_time = parse_iso_datetime(session.get('start_time'))
+            except Exception:
+                continue
+
+            hour = start_time.hour
+            hourly_performance[hour]['total_score'] += session['focus_score']
+            hourly_performance[hour]['count'] += 1
         
         # Calculate average score per hour
         hourly_avg = {}
