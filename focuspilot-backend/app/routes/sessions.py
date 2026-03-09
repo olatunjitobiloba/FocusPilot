@@ -18,6 +18,16 @@ def parse_session_datetime(value: str) -> datetime:
     return parsed
 
 
+def get_elapsed_minutes_from_start(start_time_value) -> int:
+    if not start_time_value:
+        return 0
+    try:
+        start_time = parse_session_datetime(start_time_value)
+        return max(0, int((datetime.now(timezone.utc) - start_time).total_seconds() / 60))
+    except Exception:
+        return 0
+
+
 def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Extract user_id from JWT token"""
     token = credentials.credentials
@@ -81,10 +91,9 @@ def end_session(
     if not session.data:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Calculate duration
-    start_time = parse_session_datetime(session.data['start_time'])
+    # Calculate duration safely (fallback to 0 if start_time is malformed)
     end_time = datetime.now(timezone.utc)
-    duration = int((end_time - start_time).total_seconds() / 60)
+    duration = get_elapsed_minutes_from_start(session.data.get('start_time'))
 
     # Update session
     result = supabase.table('focus_sessions').update({
@@ -107,14 +116,13 @@ def get_active_session(user_id: str = Depends(get_current_user_id)):
     """Get current active session"""
     supabase = get_supabase()
 
-    result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute()
+    result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').order('start_time', desc=True).execute()
 
     if not result.data:
         return {"active": False, "session": None}
 
     session_data = result.data[0]
-    start_time = parse_session_datetime(session_data['start_time'])
-    elapsed = int((datetime.now(timezone.utc) - start_time).total_seconds() / 60)
+    elapsed = get_elapsed_minutes_from_start(session_data.get('start_time'))
 
     return {
         "active": True,
@@ -133,15 +141,14 @@ def cleanup_active_session(user_id: str = Depends(get_current_user_id)):
     """End the user's current active session, if any."""
     supabase = get_supabase()
 
-    active = supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute()
+    active = supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').order('start_time', desc=True).execute()
 
     if not active.data:
         return {"message": "No active session found", "cleaned": False}
 
     session_data = active.data[0]
-    start_time = parse_session_datetime(session_data['start_time'])
     end_time = datetime.now(timezone.utc)
-    duration = int((end_time - start_time).total_seconds() / 60)
+    duration = get_elapsed_minutes_from_start(session_data.get('start_time'))
 
     supabase.table('focus_sessions').update({
         'end_time': end_time.isoformat(),
