@@ -38,6 +38,14 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     return false;
   }, []);
 
+  const getActiveSessionOrThrow = useCallback(async (): Promise<ActiveSession> => {
+    const response = await api.get('/sessions/active');
+    if (response.data?.active && response.data?.session?.id) {
+      return response.data.session as ActiveSession;
+    }
+    throw new Error('No active session found');
+  }, []);
+
   // Check for orphaned session on mount
   useEffect(() => {
     const checkForActiveSession = async () => {
@@ -93,25 +101,18 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     setLoading(true);
     setError('');
     try {
-      let activeSession = orphanedSession;
-      if (!activeSession) {
-        const found = await loadActiveSession();
-        if (!found) {
-          throw new Error('No active session found to resume');
-        }
-        const activeResponse = await api.get('/sessions/active');
-        activeSession = activeResponse.data?.session as ActiveSession;
-      }
+      const activeSession = orphanedSession ?? await getActiveSessionOrThrow();
 
       setSessionId(activeSession.id);
       setElapsed((activeSession.elapsed_minutes || 0) * 60);
       setIsRunning(true);
+      setOrphanedSession(activeSession);
       setShowOrphanOptions(false);
       setHasActiveSessionConflict(false);
       notifyExtension('startSession', activeSession.id);
     } catch (err: any) {
       console.error('Error resuming session:', err);
-      setError('Failed to resume session');
+      setError(err.response?.data?.detail || err.message || 'Failed to resume session');
     } finally {
       setLoading(false);
     }
@@ -128,7 +129,15 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
           distraction_count: 0
         });
       } else {
-        await api.post('/sessions/cleanup-active');
+        try {
+          await api.post('/sessions/cleanup-active');
+        } catch (cleanupActiveErr: any) {
+          if (cleanupActiveErr?.response?.status === 404) {
+            await api.post('/sessions/cleanup/orphaned');
+          } else {
+            throw cleanupActiveErr;
+          }
+        }
       }
 
       setOrphanedSession(null);
@@ -136,9 +145,17 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setHasActiveSessionConflict(false);
       notifyExtension('endSession', orphanedSession?.id);
       onSessionEnd();
+
+      try {
+        await loadActiveSession();
+      } catch {
+        setOrphanedSession(null);
+        setShowOrphanOptions(false);
+        setHasActiveSessionConflict(false);
+      }
     } catch (err: any) {
       console.error('Error cleaning up session:', err);
-      setError('Failed to clean up session');
+      setError(err.response?.data?.detail || err.message || 'Failed to clean up session');
     } finally {
       setLoading(false);
     }
