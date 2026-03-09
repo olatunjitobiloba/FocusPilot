@@ -5,13 +5,39 @@ interface SessionControlProps {
   onSessionEnd: () => void; // callback to refresh dashboard stats
 }
 
+interface ActiveSession {
+  id: string;
+  start_time: string;
+  elapsed_minutes: number;
+}
+
 export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0); // seconds
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [orphanedSession, setOrphanedSession] = useState<ActiveSession | null>(null);
+  const [showOrphanOptions, setShowOrphanOptions] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Check for orphaned session on mount
+  useEffect(() => {
+    checkForActiveSession();
+  }, []);
+
+  const checkForActiveSession = async () => {
+    try {
+      const response = await api.get('/sessions/active');
+      if (response.data.active && response.data.session) {
+        setOrphanedSession(response.data.session);
+        setShowOrphanOptions(true);
+      }
+    } catch (err) {
+      // No active session, which is fine
+      console.log('No active session found');
+    }
+  };
 
   const notifyExtension = (action: 'startSession' | 'endSession', currentSessionId?: string) => {
     const token = localStorage.getItem('token');
@@ -47,6 +73,46 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     const s = secs % 60;
     if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const handleResumeOrphanedSession = async () => {
+    if (!orphanedSession) return;
+    setLoading(true);
+    setError('');
+    try {
+      setSessionId(orphanedSession.id);
+      setElapsed(orphanedSession.elapsed_minutes * 60);
+      setIsRunning(true);
+      setShowOrphanOptions(false);
+      notifyExtension('startSession', orphanedSession.id);
+    } catch (err: any) {
+      console.error('Error resuming session:', err);
+      setError('Failed to resume session');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCleanupOrphanedSession = async () => {
+    if (!orphanedSession) return;
+    setLoading(true);
+    setError('');
+    try {
+      await api.post('/sessions/end', {
+        session_id: orphanedSession.id,
+        focus_score: 0,
+        distraction_count: 0
+      });
+      setOrphanedSession(null);
+      setShowOrphanOptions(false);
+      notifyExtension('endSession', orphanedSession.id);
+      onSessionEnd();
+    } catch (err: any) {
+      console.error('Error cleaning up session:', err);
+      setError('Failed to clean up session');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleStart = async () => {
@@ -117,6 +183,35 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
           </span>
         )}
       </div>
+
+      {/* Orphaned Session Alert */}
+      {showOrphanOptions && orphanedSession && !isRunning && (
+        <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-4">
+          <p className="text-sm font-semibold text-yellow-800 mb-3">
+            ⚠ Active Session Found
+          </p>
+          <p className="text-xs text-yellow-700 mb-4">
+            You have an active session from {formatTime(orphanedSession.elapsed_minutes * 60)} ago. 
+            Would you like to continue or end it?
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleResumeOrphanedSession}
+              disabled={loading}
+              className="flex-1 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-300 text-white font-semibold py-2 rounded-lg text-sm transition-all"
+            >
+              {loading ? 'Loading...' : 'Resume Session'}
+            </button>
+            <button
+              onClick={handleCleanupOrphanedSession}
+              disabled={loading}
+              className="flex-1 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-white font-semibold py-2 rounded-lg text-sm transition-all"
+            >
+              {loading ? 'Cleaning...' : 'End & Cleanup'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Timer Display */}
       <div className={`text-center py-6 rounded-xl mb-4 ${
