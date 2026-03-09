@@ -8,7 +8,7 @@ interface SessionControlProps {
 interface ActiveSession {
   id: string;
   start_time: string;
-  elapsed_minutes: number;
+  elapsed_minutes?: number;
 }
 
 export default function SessionControl({ onSessionEnd }: SessionControlProps) {
@@ -21,6 +21,20 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const [showOrphanOptions, setShowOrphanOptions] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const loadActiveSession = async () => {
+    const response = await api.get('/sessions/active');
+    if (response.data?.active && response.data?.session?.id) {
+      const activeSession = response.data.session as ActiveSession;
+      setOrphanedSession(activeSession);
+      setShowOrphanOptions(true);
+      return true;
+    }
+
+    setOrphanedSession(null);
+    setShowOrphanOptions(false);
+    return false;
+  };
+
   // Check for orphaned session on mount
   useEffect(() => {
     checkForActiveSession();
@@ -28,14 +42,10 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
 
   const checkForActiveSession = async () => {
     try {
-      const response = await api.get('/sessions/active');
-      if (response.data.active && response.data.session) {
-        setOrphanedSession(response.data.session);
-        setShowOrphanOptions(true);
-      }
+      await loadActiveSession();
     } catch (err) {
-      // No active session, which is fine
-      console.log('No active session found');
+      setOrphanedSession(null);
+      setShowOrphanOptions(false);
     }
   };
 
@@ -81,7 +91,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     setError('');
     try {
       setSessionId(orphanedSession.id);
-      setElapsed(orphanedSession.elapsed_minutes * 60);
+      setElapsed((orphanedSession.elapsed_minutes || 0) * 60);
       setIsRunning(true);
       setShowOrphanOptions(false);
       notifyExtension('startSession', orphanedSession.id);
@@ -128,10 +138,26 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setSessionId(session.id);
       setElapsed(0);
       setIsRunning(true);
+      setOrphanedSession(null);
+      setShowOrphanOptions(false);
       notifyExtension('startSession', session.id);
     } catch (err: any) {
       console.error('Session start error:', err);
-      setError(err.response?.data?.detail || err.message || 'Could not start session. Check your connection.');
+      const detail = err.response?.data?.detail || err.message || 'Could not start session. Check your connection.';
+      if (typeof detail === 'string' && detail.toLowerCase().includes('active session already exists')) {
+        try {
+          const found = await loadActiveSession();
+          if (found) {
+            setError('You already have an active session. Resume it or end it below.');
+          } else {
+            setError(detail);
+          }
+        } catch {
+          setError(detail);
+        }
+      } else {
+        setError(detail);
+      }
     } finally {
       setLoading(false);
     }
@@ -150,6 +176,8 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setIsRunning(false);
       setSessionId(null);
       setElapsed(0);
+      setOrphanedSession(null);
+      setShowOrphanOptions(false);
       notifyExtension('endSession', sessionId);
       onSessionEnd(); // refresh dashboard
     } catch (err: any) {
@@ -191,7 +219,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
             ⚠ Active Session Found
           </p>
           <p className="text-xs text-yellow-700 mb-4">
-            You have an active session from {formatTime(orphanedSession.elapsed_minutes * 60)} ago. 
+            You have an active session from {formatTime((orphanedSession.elapsed_minutes || 0) * 60)} ago.
             Would you like to continue or end it?
           </p>
           <div className="flex gap-2">
