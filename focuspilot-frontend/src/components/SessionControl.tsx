@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api/client';
 
 interface SessionControlProps {
@@ -21,7 +21,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const [showOrphanOptions, setShowOrphanOptions] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const loadActiveSession = async () => {
+  const loadActiveSession = useCallback(async () => {
     const response = await api.get('/sessions/active');
     if (response.data?.active && response.data?.session?.id) {
       const activeSession = response.data.session as ActiveSession;
@@ -33,21 +33,21 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     setOrphanedSession(null);
     setShowOrphanOptions(false);
     return false;
-  };
+  }, []);
 
   // Check for orphaned session on mount
   useEffect(() => {
-    checkForActiveSession();
-  }, []);
+    const checkForActiveSession = async () => {
+      try {
+        await loadActiveSession();
+      } catch (err) {
+        setOrphanedSession(null);
+        setShowOrphanOptions(false);
+      }
+    };
 
-  const checkForActiveSession = async () => {
-    try {
-      await loadActiveSession();
-    } catch (err) {
-      setOrphanedSession(null);
-      setShowOrphanOptions(false);
-    }
-  };
+    checkForActiveSession();
+  }, [loadActiveSession]);
 
   const notifyExtension = (action: 'startSession' | 'endSession', currentSessionId?: string) => {
     const token = localStorage.getItem('token');
