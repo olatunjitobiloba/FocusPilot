@@ -113,7 +113,7 @@ export default function Dashboard() {
       }
 
       // Fetch primary dashboard data in parallel (fast path)
-      const [statsRes, weeklyRes, sessionsRes, distractionsRes, recommendationsRes] = await Promise.all([
+      const [statsRes, weeklyRes, sessionsRes, distractionsRes, recommendationsRes] = await Promise.allSettled([
         api.get('/stats/daily'),
         api.get('/stats/weekly'),
         api.get('/sessions/history'),
@@ -121,9 +121,24 @@ export default function Dashboard() {
         api.get('/recommendations/')
       ]);
 
+      const extractError = (result: PromiseSettledResult<any>) =>
+        result.status === 'rejected' ? result.reason : null;
+
+      const firstAuthError = [statsRes, weeklyRes, sessionsRes, distractionsRes, recommendationsRes]
+        .map(extractError)
+        .find((err: any) => err?.response?.status === 401);
+
+      if (firstAuthError) {
+        throw firstAuthError;
+      }
+
       // Transform stats
-      const dailyStats = statsRes.data;
-      const weekly = weeklyRes.data;
+      const dailyStats = statsRes.status === 'fulfilled'
+        ? statsRes.value.data
+        : { total_focus_minutes: 0, sessions_count: 0 };
+      const weekly = weeklyRes.status === 'fulfilled'
+        ? weeklyRes.value.data
+        : { current_streak: 0, daily_breakdown: {} };
 
       setStats({
         todayHours: dailyStats.total_focus_minutes / 60,
@@ -152,8 +167,8 @@ export default function Dashboard() {
       // Transform sessions
       let formattedSessions: Session[] = [];
 
-      if (sessionsRes.data.sessions) {
-        formattedSessions = sessionsRes.data.sessions.map((s: any) => ({
+      if (sessionsRes.status === 'fulfilled' && sessionsRes.value.data.sessions) {
+        formattedSessions = sessionsRes.value.data.sessions.map((s: any) => ({
           id: s.id,
           date: new Date(s.start_time).toLocaleString(),
           duration: s.duration_minutes || 0,
@@ -167,8 +182,8 @@ export default function Dashboard() {
         }));
       }
 
-      const topDistractions = Array.isArray(distractionsRes.data?.top_distractions)
-        ? distractionsRes.data.top_distractions
+      const topDistractions = (distractionsRes.status === 'fulfilled' && Array.isArray(distractionsRes.value.data?.top_distractions))
+        ? distractionsRes.value.data.top_distractions
         : [];
 
       const computedDistractionData: DistractionData[] = topDistractions
@@ -179,8 +194,8 @@ export default function Dashboard() {
         }))
         .filter((item: DistractionData) => item.value > 0);
 
-      const fetchedRecommendations: Recommendation[] = Array.isArray(recommendationsRes.data?.recommendations)
-        ? recommendationsRes.data.recommendations.map((r: any) => ({
+      const fetchedRecommendations: Recommendation[] = (recommendationsRes.status === 'fulfilled' && Array.isArray(recommendationsRes.value.data?.recommendations))
+        ? recommendationsRes.value.data.recommendations.map((r: any) => ({
             title: r.title,
             message: r.message,
             priority: r.priority,

@@ -141,12 +141,27 @@ async function applyBlockingRules() {
 
   // Create blocking rules for each domain
   const rules = normalizedDomains.flatMap((domain, index) => [
-    // Block main domain
+    // Block with www subdomain
     {
-      id: index * 3 + 1,
+      id: index * 4 + 1,
       priority: 1,
       action: { 
-       type: 'redirect', 
+        type: 'redirect', 
+        redirect: { 
+          url: chrome.runtime.getURL('src/blocked/blocked.html') 
+        } 
+      },
+      condition: {
+        urlFilter: `*://www.${domain}/*`,
+        resourceTypes: ['main_frame']
+      }
+    },
+    // Block any subdomain
+    {
+      id: index * 4 + 2,
+      priority: 1,
+      action: { 
+        type: 'redirect', 
         redirect: { 
           url: chrome.runtime.getURL('src/blocked/blocked.html') 
         } 
@@ -156,9 +171,9 @@ async function applyBlockingRules() {
         resourceTypes: ['main_frame']
       }
     },
-    // Block without www
+    // Block bare domain with path
     {
-      id: index * 3 + 2,
+      id: index * 4 + 3,
       priority: 1,
       action: { 
         type: 'redirect', 
@@ -171,9 +186,9 @@ async function applyBlockingRules() {
         resourceTypes: ['main_frame']
       }
     },
-    // Block root domain
+    // Block bare domain without path
     {
-      id: index * 3 + 3,
+      id: index * 4 + 4,
       priority: 1,
       action: { 
         type: 'redirect', 
@@ -404,6 +419,29 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           title: 'Added to Blocklist',
           message: `${domain} will be blocked during focus sessions`
         });
+        
+        // If a session is active, refresh blocking rules to include new domain
+        if (activeSession) {
+          console.log('Active session detected. Refreshing blocking rules...');
+          try {
+            const blocklistResponse = await fetch(`${API_URL}/blocklist/`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (blocklistResponse.ok) {
+              const blocklistData = await blocklistResponse.json();
+              blockedDomains = blocklistData.blocklist.map(item => item.domain);
+              console.log('Updated blocklist:', blockedDomains);
+              await applyBlockingRules();
+              console.log('✓ Blocking rules refreshed with new domain');
+            }
+          } catch (refreshError) {
+            console.error('Failed to refresh blocking rules:', refreshError);
+          }
+        }
       }
     } catch (error) {
       console.error('Error adding to blocklist:', error);
