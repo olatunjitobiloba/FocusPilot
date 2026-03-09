@@ -29,9 +29,9 @@ def get_daily_stats(user_id: str = Depends(get_current_user_id)):
     # Calculate stats
     total_focus_minutes = sum((s.get('duration_minutes') or 0) for s in sessions)
     sessions_count = len(sessions)
-    total_distractions = sum(s.get('distraction_count', 0) for s in sessions)
+    total_distractions = sum((s.get('distraction_count') or 0) for s in sessions)
     avg_focus_score = (
-        sum(s.get('focus_score', 0) for s in sessions) / sessions_count 
+        sum((s.get('focus_score') or 0) for s in sessions) / sessions_count 
         if sessions_count > 0 else 0
     )
 
