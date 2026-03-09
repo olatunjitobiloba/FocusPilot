@@ -135,73 +135,27 @@ async function applyBlockingRules() {
 
   const normalizedDomains = blockedDomains
     .map(normalizeDomain)
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((domain) => domain.toLowerCase());
 
-  console.log('Normalized domains to block:', normalizedDomains);
+  const uniqueDomains = [...new Set(normalizedDomains)];
 
-  // Create blocking rules for each domain
-  const rules = normalizedDomains.flatMap((domain, index) => [
-    // Block with www subdomain
-    {
-      id: index * 4 + 1,
-      priority: 1,
-      action: { 
-        type: 'redirect', 
-        redirect: { 
-          url: chrome.runtime.getURL('src/blocked/blocked.html') 
-        } 
-      },
-      condition: {
-        urlFilter: `*://www.${domain}/*`,
-        resourceTypes: ['main_frame']
+  console.log('Normalized domains to block:', uniqueDomains);
+
+  const rules = uniqueDomains.map((domain, index) => ({
+    id: index + 1,
+    priority: 1,
+    action: {
+      type: 'redirect',
+      redirect: {
+        url: chrome.runtime.getURL('src/blocked/blocked.html')
       }
     },
-    // Block any subdomain
-    {
-      id: index * 4 + 2,
-      priority: 1,
-      action: { 
-        type: 'redirect', 
-        redirect: { 
-          url: chrome.runtime.getURL('src/blocked/blocked.html') 
-        } 
-      },
-      condition: {
-        urlFilter: `*://*.${domain}/*`,
-        resourceTypes: ['main_frame']
-      }
-    },
-    // Block bare domain with path
-    {
-      id: index * 4 + 3,
-      priority: 1,
-      action: { 
-        type: 'redirect', 
-        redirect: { 
-          url: chrome.runtime.getURL('src/blocked/blocked.html') 
-        } 
-      },
-      condition: {
-        urlFilter: `*://${domain}/*`,
-        resourceTypes: ['main_frame']
-      }
-    },
-    // Block bare domain without path
-    {
-      id: index * 4 + 4,
-      priority: 1,
-      action: { 
-        type: 'redirect', 
-        redirect: { 
-          url: chrome.runtime.getURL('src/blocked/blocked.html') 
-        } 
-      },
-      condition: {
-        urlFilter: `*://${domain}`,
-        resourceTypes: ['main_frame']
-      }
+    condition: {
+      requestDomains: [domain],
+      resourceTypes: ['main_frame']
     }
-  ]);
+  }));
   
   console.log('Applying blocking rules:', rules);
   
