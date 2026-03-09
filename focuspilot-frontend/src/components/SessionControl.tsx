@@ -27,6 +27,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0); // seconds
   const [loading, setLoading] = useState(false);
+  const [lastAction, setLastAction] = useState<'start' | 'end' | null>(null);
   const [error, setError] = useState('');
   const [orphanedSession, setOrphanedSession] = useState<ActiveSession | null>(null);
   const [showOrphanOptions, setShowOrphanOptions] = useState(false);
@@ -188,8 +189,25 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   };
 
   const handleStart = async () => {
+    const previousState = {
+      isRunning,
+      sessionId,
+      elapsed,
+      orphanedSession,
+      showOrphanOptions,
+      hasActiveSessionConflict,
+    };
+
+    setLastAction('start');
     setLoading(true);
     setError('');
+
+    setIsRunning(true);
+    setElapsed(0);
+    setOrphanedSession(null);
+    setShowOrphanOptions(false);
+    setHasActiveSessionConflict(false);
+
     try {
       const res = await api.post('/sessions/start', { planned_duration: 25 });
       const session = res.data?.session;
@@ -205,6 +223,13 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setHasActiveSessionConflict(false);
       notifyExtension('startSession', session.id);
     } catch (err: any) {
+      setIsRunning(previousState.isRunning);
+      setSessionId(previousState.sessionId);
+      setElapsed(previousState.elapsed);
+      setOrphanedSession(previousState.orphanedSession);
+      setShowOrphanOptions(previousState.showOrphanOptions);
+      setHasActiveSessionConflict(previousState.hasActiveSessionConflict);
+
       console.error('Session start error:', err);
       const detail = err.response?.data?.detail || err.message || 'Could not start session. Check your connection.';
       if (typeof detail === 'string' && detail.toLowerCase().includes('active session already exists')) {
@@ -225,32 +250,45 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       }
     } finally {
       setLoading(false);
+      setLastAction(null);
     }
   };
 
   const handleEnd = async () => {
-    if (!sessionId) return;
+    const endingSessionId = sessionId;
+    if (!endingSessionId) return;
+
+    const previousElapsed = elapsed;
+
+    setLastAction('end');
     setLoading(true);
     setError('');
+
+    setIsRunning(false);
+    setSessionId(null);
+    setElapsed(0);
+    setOrphanedSession(null);
+    setShowOrphanOptions(false);
+    setHasActiveSessionConflict(false);
+
     try {
       await api.post('/sessions/end', {
-        session_id: sessionId,
+        session_id: endingSessionId,
         focus_score: 8,
         distraction_count: 0
       });
-      setIsRunning(false);
-      setSessionId(null);
-      setElapsed(0);
-      setOrphanedSession(null);
-      setShowOrphanOptions(false);
-      setHasActiveSessionConflict(false);
-      notifyExtension('endSession', sessionId);
+      notifyExtension('endSession', endingSessionId);
       onSessionEnd(); // refresh dashboard
     } catch (err: any) {
+      setIsRunning(true);
+      setSessionId(endingSessionId);
+      setElapsed(previousElapsed);
+
       console.error('Session end error:', err);
       setError(err.response?.data?.detail || err.message || 'Could not end session. Try again.');
     } finally {
       setLoading(false);
+      setLastAction(null);
     }
   };
 
@@ -338,7 +376,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
           disabled={loading}
           className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-bold py-4 rounded-xl text-lg transition-all shadow-md hover:shadow-lg active:scale-95"
         >
-          {loading ? 'Starting...' : 'Start Focus Session'}
+          {loading ? (lastAction === 'end' ? 'Ending...' : 'Starting...') : 'Start Focus Session'}
         </button>
       ) : (
         <button
@@ -346,7 +384,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
           disabled={loading}
           className="w-full bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-white font-bold py-4 rounded-xl text-lg transition-all shadow-md hover:shadow-lg active:scale-95"
         >
-          {loading ? 'Ending...' : 'End Session'}
+          {loading ? (lastAction === 'start' ? 'Starting...' : 'Ending...') : 'End Session'}
         </button>
       )}
 

@@ -3,9 +3,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import SessionControl from '../components/SessionControl';
+import Navbar from '../components/Navbar';
 
 interface Stats {
   todayHours: number;
@@ -85,6 +86,7 @@ function SessionCard({ session }: { session: Session }) {
 
 // ── MAIN DASHBOARD ────────────────────────────────────────────────
 export default function Dashboard() {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<'overview' | 'sessions' | 'insights'>('overview');
   const [stats, setStats] = useState<Stats | null>(null);
   const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
@@ -95,6 +97,15 @@ export default function Dashboard() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [error, setError] = useState<string>('');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const tab = new URLSearchParams(location.search).get('tab');
+    if (tab === 'sessions' || tab === 'insights' || tab === 'overview') {
+      setActiveTab(tab);
+      return;
+    }
+    setActiveTab('overview');
+  }, [location.search]);
 
   const loadDashboardData = useCallback(async (isInitialLoad = false) => {
     try {
@@ -320,40 +331,13 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Navbar />
 
-      {/* ── HEADER ── */}
-      <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div>
-            <h1 className="text-lg font-bold text-gray-800">FocusPilot</h1>
-            <p className="text-xs text-gray-400">Autonomous Productivity Agent</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs bg-green-100 text-green-600 font-semibold px-3 py-1 rounded-full">Agent Active</span>
-          <button
-            onClick={() => navigate('/blocklist')}
-            className="text-sm text-gray-500 hover:text-green-600 font-medium transition-colors"
-          >
-            Blocklist
-          </button>
-          <button
-            onClick={() => {
-              localStorage.clear();
-              navigate('/login');
-            }}
-            className="text-sm text-gray-500 hover:text-red-500 font-medium transition-colors"
-          >
-            Logout
-          </button>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
 
         {/* ── TABS ── */}
         <div className="flex gap-2 mb-8 bg-white rounded-xl p-1 shadow-sm border border-gray-100 w-fit">
-          {(['overview', 'sessions', 'insights'] as const).map((tab) => (
+          {(['overview', 'insights'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -363,7 +347,7 @@ export default function Dashboard() {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab === 'overview' ? 'Overview' : tab === 'sessions' ? 'Sessions' : 'Insights'}
+              {tab === 'overview' ? 'Overview' : 'Insights'}
             </button>
           ))}
         </div>

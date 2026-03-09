@@ -29,7 +29,26 @@ export const authAPI = {
 };
 
 export const blocklistAPI = {
-  list: () => api.get('/blocklist/'),
-  add: (domain: string) => api.post('/blocklist/', { domain }),
-  remove: (id: string) => api.delete(`/blocklist/${id}`),
+  getAll: () =>
+    api.get('/blocklist/'),
+
+  add: (domain: string, reason?: string) =>
+    api.post('/blocklist/', { domain, reason }),
+
+  remove: (domain: string) =>
+    api.delete(`/blocklist/${domain}`),
+};
+
+export const suggestionsAPI = {
+  getAll: () =>
+    api.get('/suggestions/'),
+
+  accept: (domain: string) =>
+    api.post('/suggestions/accept', { domain }),
+
+  dismiss: (domain: string) =>
+    api.post('/suggestions/dismiss', { domain }),
+
+  score: (domain: string) =>
+    api.get(`/suggestions/score/${domain}`),
 };
