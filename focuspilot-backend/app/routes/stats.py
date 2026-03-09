@@ -24,11 +24,10 @@ def get_daily_stats(user_id: str = Depends(get_current_user_id)):
     ).lte(
         'start_time', f'{today}T23:59:59'
     ).execute()
-    
     sessions = result.data
     
     # Calculate stats
-    total_focus_minutes = sum(s.get('duration_minutes', 0) for s in sessions)
+    total_focus_minutes = sum((s.get('duration_minutes') or 0) for s in sessions)
     sessions_count = len(sessions)
     total_distractions = sum(s.get('distraction_count', 0) for s in sessions)
     avg_focus_score = (
@@ -81,7 +80,7 @@ def get_weekly_stats(user_id: str = Depends(get_current_user_id)):
     sessions = result.data
     
     # Calculate stats
-    total_focus_minutes = sum(s.get('duration_minutes', 0) for s in sessions)
+    total_focus_minutes = sum((s.get('duration_minutes') or 0) for s in sessions)
     total_sessions = len(sessions)
     avg_session_duration = (
         total_focus_minutes / total_sessions 
@@ -93,7 +92,7 @@ def get_weekly_stats(user_id: str = Depends(get_current_user_id)):
     sessions_by_date = defaultdict(lambda: {'minutes': 0, 'sessions': 0})
     for session in sessions:
         date = session['start_time'][:10]  # Extract date part
-        sessions_by_date[date]['minutes'] += session.get('duration_minutes', 0)
+        sessions_by_date[date]['minutes'] += (session.get('duration_minutes') or 0)
         sessions_by_date[date]['sessions'] += 1
 
     # Count consecutive days from today backwards
@@ -111,8 +110,8 @@ def get_weekly_stats(user_id: str = Depends(get_current_user_id)):
     first_half = [s for s in sessions if s['start_time'][:10] < str(mid_week)]
     second_half = [s for s in sessions if s['start_time'][:10] >= str(mid_week)]
 
-    first_half_minutes = sum(s.get('duration_minutes', 0) for s in first_half)
-    second_half_minutes = sum(s.get('duration_minutes', 0) for s in second_half)
+    first_half_minutes = sum((s.get('duration_minutes') or 0) for s in first_half)
+    second_half_minutes = sum((s.get('duration_minutes') or 0) for s in second_half)
 
     if first_half_minutes == 0:
         trend = "new"
