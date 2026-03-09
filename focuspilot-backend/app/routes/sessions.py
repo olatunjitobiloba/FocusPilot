@@ -128,6 +128,36 @@ def get_active_session(user_id: str = Depends(get_current_user_id)):
     }
 
 
+@router.post("/cleanup-active")
+def cleanup_active_session(user_id: str = Depends(get_current_user_id)):
+    """End the user's current active session, if any."""
+    supabase = get_supabase()
+
+    active = supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute()
+
+    if not active.data:
+        return {"message": "No active session found", "cleaned": False}
+
+    session_data = active.data[0]
+    start_time = parse_session_datetime(session_data['start_time'])
+    end_time = datetime.now(timezone.utc)
+    duration = int((end_time - start_time).total_seconds() / 60)
+
+    supabase.table('focus_sessions').update({
+        'end_time': end_time.isoformat(),
+        'duration_minutes': duration,
+        'focus_score': session_data.get('focus_score') or 0,
+        'distraction_count': session_data.get('distraction_count') or 0
+    }).eq('id', session_data['id']).execute()
+
+    return {
+        "message": "Active session cleaned up",
+        "cleaned": True,
+        "session_id": session_data['id'],
+        "duration_minutes": duration
+    }
+
+
 @router.get("/history")
 def get_session_history(
     limit: int = 10,

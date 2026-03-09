@@ -19,6 +19,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const [error, setError] = useState('');
   const [orphanedSession, setOrphanedSession] = useState<ActiveSession | null>(null);
   const [showOrphanOptions, setShowOrphanOptions] = useState(false);
+  const [hasActiveSessionConflict, setHasActiveSessionConflict] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const loadActiveSession = useCallback(async () => {
@@ -27,11 +28,13 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       const activeSession = response.data.session as ActiveSession;
       setOrphanedSession(activeSession);
       setShowOrphanOptions(true);
+      setHasActiveSessionConflict(true);
       return true;
     }
 
     setOrphanedSession(null);
     setShowOrphanOptions(false);
+    setHasActiveSessionConflict(false);
     return false;
   }, []);
 
@@ -43,6 +46,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       } catch (err) {
         setOrphanedSession(null);
         setShowOrphanOptions(false);
+        setHasActiveSessionConflict(false);
       }
     };
 
@@ -86,15 +90,25 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   };
 
   const handleResumeOrphanedSession = async () => {
-    if (!orphanedSession) return;
     setLoading(true);
     setError('');
     try {
-      setSessionId(orphanedSession.id);
-      setElapsed((orphanedSession.elapsed_minutes || 0) * 60);
+      let activeSession = orphanedSession;
+      if (!activeSession) {
+        const found = await loadActiveSession();
+        if (!found) {
+          throw new Error('No active session found to resume');
+        }
+        const activeResponse = await api.get('/sessions/active');
+        activeSession = activeResponse.data?.session as ActiveSession;
+      }
+
+      setSessionId(activeSession.id);
+      setElapsed((activeSession.elapsed_minutes || 0) * 60);
       setIsRunning(true);
       setShowOrphanOptions(false);
-      notifyExtension('startSession', orphanedSession.id);
+      setHasActiveSessionConflict(false);
+      notifyExtension('startSession', activeSession.id);
     } catch (err: any) {
       console.error('Error resuming session:', err);
       setError('Failed to resume session');
@@ -104,18 +118,23 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   };
 
   const handleCleanupOrphanedSession = async () => {
-    if (!orphanedSession) return;
     setLoading(true);
     setError('');
     try {
-      await api.post('/sessions/end', {
-        session_id: orphanedSession.id,
-        focus_score: 0,
-        distraction_count: 0
-      });
+      if (orphanedSession?.id) {
+        await api.post('/sessions/end', {
+          session_id: orphanedSession.id,
+          focus_score: 0,
+          distraction_count: 0
+        });
+      } else {
+        await api.post('/sessions/cleanup-active');
+      }
+
       setOrphanedSession(null);
       setShowOrphanOptions(false);
-      notifyExtension('endSession', orphanedSession.id);
+      setHasActiveSessionConflict(false);
+      notifyExtension('endSession', orphanedSession?.id);
       onSessionEnd();
     } catch (err: any) {
       console.error('Error cleaning up session:', err);
@@ -140,20 +159,23 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setIsRunning(true);
       setOrphanedSession(null);
       setShowOrphanOptions(false);
+      setHasActiveSessionConflict(false);
       notifyExtension('startSession', session.id);
     } catch (err: any) {
       console.error('Session start error:', err);
       const detail = err.response?.data?.detail || err.message || 'Could not start session. Check your connection.';
       if (typeof detail === 'string' && detail.toLowerCase().includes('active session already exists')) {
+        setHasActiveSessionConflict(true);
+        setShowOrphanOptions(true);
         try {
           const found = await loadActiveSession();
           if (found) {
             setError('You already have an active session. Resume it or end it below.');
           } else {
-            setError(detail);
+            setError('You already have an active session. Click Resume Session or End & Cleanup below.');
           }
         } catch {
-          setError(detail);
+          setError('You already have an active session. Click Resume Session or End & Cleanup below.');
         }
       } else {
         setError(detail);
@@ -178,6 +200,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setElapsed(0);
       setOrphanedSession(null);
       setShowOrphanOptions(false);
+      setHasActiveSessionConflict(false);
       notifyExtension('endSession', sessionId);
       onSessionEnd(); // refresh dashboard
     } catch (err: any) {
@@ -213,14 +236,15 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       </div>
 
       {/* Orphaned Session Alert */}
-      {showOrphanOptions && orphanedSession && !isRunning && (
+      {(showOrphanOptions || hasActiveSessionConflict) && !isRunning && (
         <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-4">
           <p className="text-sm font-semibold text-yellow-800 mb-3">
             ⚠ Active Session Found
           </p>
           <p className="text-xs text-yellow-700 mb-4">
-            You have an active session from {formatTime((orphanedSession.elapsed_minutes || 0) * 60)} ago.
-            Would you like to continue or end it?
+            {orphanedSession
+              ? `You have an active session from ${formatTime((orphanedSession.elapsed_minutes || 0) * 60)} ago. Would you like to continue or end it?`
+              : 'You already have an active session. Would you like to continue it or end and clean it up?'}
           </p>
           <div className="flex gap-2">
             <button
