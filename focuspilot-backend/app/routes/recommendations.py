@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends
 from app.auth import get_current_user_id
 from app.database import get_supabase
+from app.domain_whitelist import filter_activities_by_domain
 from datetime import datetime, timedelta
 from collections import defaultdict
 
@@ -22,7 +23,7 @@ def get_recommendations(user_id: str = Depends(get_current_user_id)):
     activities_result = supabase.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute()
     
     sessions = sessions_result.data
-    activities = activities_result.data
+    activities = filter_activities_by_domain(activities_result.data)
     
     recommendations = []
     

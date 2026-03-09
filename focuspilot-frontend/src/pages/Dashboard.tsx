@@ -42,7 +42,8 @@ interface DistractionData {
 
 interface Recommendation {
   title: string;
-  text: string;
+  message: string;
+  priority?: 'high' | 'medium' | 'low';
 }
 
 const COLORS = ['#16a34a', '#22c55e', '#4ade80', '#86efac'];
@@ -91,6 +92,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [distractionData, setDistractionData] = useState<DistractionData[]>([]);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [error, setError] = useState<string>('');
   const navigate = useNavigate();
 
@@ -111,10 +113,12 @@ export default function Dashboard() {
       }
 
       // Fetch primary dashboard data in parallel (fast path)
-      const [statsRes, weeklyRes, sessionsRes] = await Promise.all([
+      const [statsRes, weeklyRes, sessionsRes, distractionsRes, recommendationsRes] = await Promise.all([
         api.get('/stats/daily'),
         api.get('/stats/weekly'),
-        api.get('/sessions/history')
+        api.get('/sessions/history'),
+        api.get('/analytics/distractions'),
+        api.get('/recommendations/')
       ]);
 
       // Transform stats
@@ -147,7 +151,6 @@ export default function Dashboard() {
 
       // Transform sessions
       let formattedSessions: Session[] = [];
-      let computedDistractionData: DistractionData[] = [];
 
       if (sessionsRes.data.sessions) {
         formattedSessions = sessionsRes.data.sessions.map((s: any) => ({
@@ -162,26 +165,31 @@ export default function Dashboard() {
           focus_score: s.focus_score,
           distraction_count: s.distraction_count,
         }));
-
-        const distractionMap: { [key: string]: number } = {};
-        formattedSessions.forEach((s: Session) => {
-          if (s.distractions > 0) {
-            distractionMap['Total Distractions'] = (distractionMap['Total Distractions'] || 0) + s.distractions;
-          }
-        });
-
-        if (Object.keys(distractionMap).length > 0) {
-          computedDistractionData = [
-            { name: 'YouTube', value: 40 },
-            { name: 'Twitter', value: 25 },
-            { name: 'Instagram', value: 20 },
-            { name: 'Others', value: 15 },
-          ];
-        }
       }
+
+      const topDistractions = Array.isArray(distractionsRes.data?.top_distractions)
+        ? distractionsRes.data.top_distractions
+        : [];
+
+      const computedDistractionData: DistractionData[] = topDistractions
+        .slice(0, 5)
+        .map((item: any) => ({
+          name: item.domain,
+          value: Number(item.total_minutes || 0),
+        }))
+        .filter((item: DistractionData) => item.value > 0);
+
+      const fetchedRecommendations: Recommendation[] = Array.isArray(recommendationsRes.data?.recommendations)
+        ? recommendationsRes.data.recommendations.map((r: any) => ({
+            title: r.title,
+            message: r.message,
+            priority: r.priority,
+          }))
+        : [];
 
       setSessions(formattedSessions);
       setDistractionData(computedDistractionData);
+      setRecommendations(fetchedRecommendations);
 
       // Cache lightweight dashboard payload for faster subsequent loads
       try {
@@ -208,7 +216,8 @@ export default function Dashboard() {
               };
             }),
             sessions: formattedSessions,
-            distractionData: computedDistractionData
+            distractionData: computedDistractionData,
+            recommendations: fetchedRecommendations
           })
         );
       } catch (cacheErr) {
@@ -259,6 +268,7 @@ export default function Dashboard() {
         if (Array.isArray(parsed?.weeklyData)) setWeeklyData(parsed.weeklyData);
         if (Array.isArray(parsed?.sessions)) setSessions(parsed.sessions);
         if (Array.isArray(parsed?.distractionData)) setDistractionData(parsed.distractionData);
+        if (Array.isArray(parsed?.recommendations)) setRecommendations(parsed.recommendations);
         setLoading(false);
         loadDashboardData(false);
         return;
@@ -282,12 +292,6 @@ export default function Dashboard() {
       }, '*');
     }
   }, []);
-
-  const recommendations: Recommendation[] = [
-    { title: 'Optimal Session Length', text: 'Your best sessions average 32 minutes. Try this duration next time!' },
-    { title: 'Your Peak Hour', text: 'You focus best at 17:00 (avg score: 8.0). Schedule important tasks then!' },
-    { title: 'Build Consistency', text: `You studied ${stats?.todaySessions || 0} sessions today. Try to study daily for better results!` },
-  ];
 
   if (loading) {
     return (
@@ -456,7 +460,7 @@ export default function Dashboard() {
                           <Cell key={i} fill={COLORS[i % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip formatter={(v) => [`${v} min`, 'Time spent']} />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
@@ -494,17 +498,24 @@ export default function Dashboard() {
         {activeTab === 'insights' && (
           <div className="flex flex-col gap-4">
             <h2 className="text-lg font-bold text-gray-700">Recommendations</h2>
-            {recommendations.map((r, i) => (
-              <div
-                key={i}
-                className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex gap-4 items-start"
-              >
-                <div>
-                  <p className="font-bold text-gray-800 mb-1">{r.title}</p>
-                  <p className="text-sm text-gray-500">{r.text}</p>
+            {recommendations.length > 0 ? (
+              recommendations.map((r, i) => (
+                <div
+                  key={i}
+                  className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex gap-4 items-start"
+                >
+                  <div>
+                    <p className="font-bold text-gray-800 mb-1">{r.title}</p>
+                    <p className="text-sm text-gray-500">{r.message}</p>
+                  </div>
                 </div>
+              ))
+            ) : (
+              <div className="bg-white rounded-2xl p-8 text-center border border-gray-100">
+                <p className="text-gray-600 font-medium">No recommendations yet</p>
+                <p className="text-sm text-gray-400 mt-1">Complete a few sessions to get AI suggestions</p>
               </div>
-            ))}
+            )}
           </div>
         )}
       </main>

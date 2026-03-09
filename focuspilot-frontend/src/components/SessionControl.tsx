@@ -12,6 +12,16 @@ interface ActiveSession {
   elapsed_minutes?: number;
 }
 
+function parseSessionStartTimeToMillis(startTime: string): number {
+  if (!startTime) return NaN;
+
+  // If timestamp has no timezone marker, treat it as UTC to match backend logic.
+  const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(startTime);
+  const normalized = hasTimezone ? startTime : `${startTime}Z`;
+
+  return new Date(normalized).getTime();
+}
+
 export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -109,12 +119,15 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
         ? Math.max(0, activeSession.elapsed_seconds)
         : Math.max(0, (activeSession.elapsed_minutes || 0) * 60);
 
-      const parsedStartTime = new Date(activeSession.start_time);
-      const calculatedFromStartSeconds = Number.isNaN(parsedStartTime.getTime())
+      const startTimeMs = parseSessionStartTimeToMillis(activeSession.start_time);
+      const calculatedFromStartSeconds = Number.isNaN(startTimeMs)
         ? 0
-        : Math.max(0, Math.floor((Date.now() - parsedStartTime.getTime()) / 1000));
+        : Math.max(0, Math.floor((Date.now() - startTimeMs) / 1000));
 
-      const resumeElapsedSeconds = Math.max(backendElapsedSeconds, calculatedFromStartSeconds);
+      // Backend is the source of truth; fallback to client-side calc only when backend value is missing/zero.
+      const resumeElapsedSeconds = backendElapsedSeconds > 0
+        ? backendElapsedSeconds
+        : calculatedFromStartSeconds;
 
       setSessionId(activeSession.id);
       setElapsed(resumeElapsedSeconds);

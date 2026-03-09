@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends
 from app.auth import get_current_user_id
 from app.database import get_supabase
+from app.domain_whitelist import is_whitelisted_domain
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/stats", tags=["Statistics"])
@@ -44,7 +45,11 @@ def get_daily_stats(user_id: str = Depends(get_current_user_id)):
 
     # Count domain frequency
     from collections import Counter
-    domain_counts = Counter(d['domain'] for d in distractions_result.data if d.get('domain'))
+    domain_counts = Counter(
+        d['domain']
+        for d in distractions_result.data
+        if d.get('domain') and not is_whitelisted_domain(d['domain'])
+    )
     top_distractions = [domain for domain, _ in domain_counts.most_common(3)]
     
     return {

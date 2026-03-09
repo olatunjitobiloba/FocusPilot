@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import auth, sessions, agent, stats, blocklist, analytics, recommendations
+from app.routes import auth, sessions, agent, stats, blocklist, analytics, recommendations, suggestions
 from app.database import get_supabase
 
 app = FastAPI(
@@ -26,6 +26,7 @@ app.include_router(stats.router)
 app.include_router(blocklist.router)
 app.include_router(analytics.router)
 app.include_router(recommendations.router)
+app.include_router(suggestions.router)
 
 @app.get("/")
 def root():

@@ -9,6 +9,10 @@ Thumbs.db
 # Logs
 *.log
 
+# Environment files
+**/.env
+**/.env.local
+
 # Python cache / bytecode
 **/__pycache__/
 **/*.py[cod]

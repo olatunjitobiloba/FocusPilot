@@ -1,7 +1,7 @@
 // src/api/client.ts
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || "https://OlatunjiTobi-focusflow-agent.hf.space";
+const API_URL = process.env.REACT_APP_API_URL || "https://OlatunjiTobi-focuspilot-agent.hf.space";
 
 export const api = axios.create({
   baseURL: API_URL,

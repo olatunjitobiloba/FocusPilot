@@ -101,6 +101,13 @@ button:hover {
   margin-top: 20px;
 }
 
+.btn-end-session {
+  background: #dc2626;
+  color: white;
+  width: 100%;
+  margin-top: 10px;
+}
+
 .btn-logout {
   background: transparent;
   color: white;

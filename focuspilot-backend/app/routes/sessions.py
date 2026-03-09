@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.models import SessionStart, SessionEnd, ActivityLog
 from app.auth import verify_token
 from app.database import get_supabase
+from app.domain_whitelist import is_whitelisted_domain, filter_activities_by_domain
 from datetime import datetime, timezone
 from collections import defaultdict
 import uuid
@@ -19,6 +20,20 @@ def parse_session_datetime(value) -> datetime:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed
+
+
+def session_sort_key(session: dict) -> datetime:
+    try:
+        return parse_session_datetime(session.get('start_time'))
+    except Exception:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def get_newest_active_session(active_sessions: list[dict]) -> tuple[dict, list[dict]]:
+    sorted_sessions = sorted(active_sessions, key=session_sort_key, reverse=True)
+    newest = sorted_sessions[0]
+    stale = sorted_sessions[1:]
+    return newest, stale
 
 
 def get_elapsed_minutes_from_start(start_time_value) -> int:
@@ -64,10 +79,24 @@ def start_session(
     """Start a new focus session"""
     supabase = get_supabase()
 
-    # Check for active session
+    # Check for active session(s)
     active = supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute()
 
     if active.data:
+        newest_active, stale_sessions = get_newest_active_session(active.data)
+
+        # Self-heal old duplicate active sessions if they exist
+        if stale_sessions:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            for stale_session in stale_sessions:
+                stale_duration = get_elapsed_minutes_from_start(stale_session.get('start_time'))
+                supabase.table('focus_sessions').update({
+                    'end_time': now_iso,
+                    'duration_minutes': stale_duration,
+                    'focus_score': stale_session.get('focus_score') or 0,
+                    'distraction_count': stale_session.get('distraction_count') or 0
+                }).eq('id', stale_session['id']).execute()
+
         raise HTTPException(status_code=400, detail="Active session already exists")
 
     # Create session
@@ -129,12 +158,25 @@ def get_active_session(user_id: str = Depends(get_current_user_id)):
     """Get current active session"""
     supabase = get_supabase()
 
-    result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').order('start_time', desc=True).execute()
+    result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute()
 
     if not result.data:
         return {"active": False, "session": None}
 
-    session_data = result.data[0]
+    session_data, stale_sessions = get_newest_active_session(result.data)
+
+    # Auto-close stale duplicate active sessions to prevent incorrect resume timers.
+    if stale_sessions:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for stale_session in stale_sessions:
+            stale_duration = get_elapsed_minutes_from_start(stale_session.get('start_time'))
+            supabase.table('focus_sessions').update({
+                'end_time': now_iso,
+                'duration_minutes': stale_duration,
+                'focus_score': stale_session.get('focus_score') or 0,
+                'distraction_count': stale_session.get('distraction_count') or 0
+            }).eq('id', stale_session['id']).execute()
+
     elapsed_seconds = get_elapsed_seconds_from_start(session_data.get('start_time'))
     elapsed = max(0, int(elapsed_seconds / 60))
 
@@ -146,7 +188,8 @@ def get_active_session(user_id: str = Depends(get_current_user_id)):
             "start_time": session_data['start_time'],
             "distraction_count": session_data.get('distraction_count', 0),
             "elapsed_seconds": elapsed_seconds,
-            "elapsed_minutes": elapsed
+            "elapsed_minutes": elapsed,
+            "stale_sessions_closed": len(stale_sessions)
         }
     }
 
@@ -212,6 +255,9 @@ def log_activity(
     if not session.data:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    if is_whitelisted_domain(activity.domain):
+        return {"message": "Activity ignored (whitelisted domain)", "ignored": True}
+
     # Log activity
     supabase.table('browsing_activity').insert({
         'session_id': session_id,
@@ -233,8 +279,9 @@ def get_session_activity(
     supabase = get_supabase()
 
     result = supabase.table('browsing_activity').select("*").eq('session_id', session_id).eq('user_id', user_id).execute()
+    activities = filter_activities_by_domain(result.data)
 
-    return {"activities": result.data}
+    return {"activities": activities}
 
 
 # ─────────────────────────────────────────────
@@ -289,7 +336,7 @@ def get_detailed_history(
         # Get activities for this session
         activities_result = supabase.table('browsing_activity').select("*").eq('session_id', session_id).execute()
 
-        activities = activities_result.data
+        activities = filter_activities_by_domain(activities_result.data)
 
         # Calculate distraction count
         distraction_count = len(activities)

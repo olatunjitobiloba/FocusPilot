@@ -7,6 +7,15 @@ window.addEventListener('message', (event) => {
   const message = event.data;
   if (!message || message.source !== 'focuspilot-web') return;
 
+  // Handle token sync
+  if (message.action === 'syncToken' && message.token) {
+    console.log('FocusPilot: Syncing token to extension storage');
+    chrome.storage.local.set({ token: message.token }, () => {
+      console.log('FocusPilot: Token saved to extension storage');
+    });
+    return;
+  }
+
   if (message.action !== 'startSession' && message.action !== 'endSession') return;
 
   console.log('FocusPilot: Forwarding message to background:', message.action, message.sessionId);

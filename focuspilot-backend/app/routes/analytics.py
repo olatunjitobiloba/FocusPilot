@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, Query
 from app.auth import get_current_user_id
 from app.database import get_supabase
+from app.domain_whitelist import filter_activities_by_domain
 from datetime import datetime, timedelta
 from collections import defaultdict
 from typing import Optional
@@ -24,7 +25,7 @@ def get_distraction_analysis(
     
     result = supabase.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute()
     
-    activities = result.data
+    activities = filter_activities_by_domain(result.data)
     
     # Group by domain
     domain_stats = defaultdict(lambda: {'total_seconds': 0, 'visit_count': 0})
@@ -84,7 +85,7 @@ def get_time_breakdown(
     activities_result = supabase.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute()
     
     sessions = sessions_result.data
-    activities = activities_result.data
+    activities = filter_activities_by_domain(activities_result.data)
     
     # Calculate focus time
     total_focus_minutes = sum(s['duration_minutes'] or 0 for s in sessions if s['end_time'])
