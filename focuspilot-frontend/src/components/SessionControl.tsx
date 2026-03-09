@@ -8,6 +8,7 @@ interface SessionControlProps {
 interface ActiveSession {
   id: string;
   start_time: string;
+  elapsed_seconds?: number;
   elapsed_minutes?: number;
 }
 
@@ -103,12 +104,20 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     setError('');
     try {
       const activeSession = orphanedSession ?? await getActiveSessionOrThrow();
-      console.log('Resuming session:', activeSession);
-      console.log('Elapsed minutes from backend:', activeSession.elapsed_minutes);
-      console.log('Setting elapsed seconds to:', (activeSession.elapsed_minutes || 0) * 60);
+
+      const backendElapsedSeconds = typeof activeSession.elapsed_seconds === 'number'
+        ? Math.max(0, activeSession.elapsed_seconds)
+        : Math.max(0, (activeSession.elapsed_minutes || 0) * 60);
+
+      const parsedStartTime = new Date(activeSession.start_time);
+      const calculatedFromStartSeconds = Number.isNaN(parsedStartTime.getTime())
+        ? 0
+        : Math.max(0, Math.floor((Date.now() - parsedStartTime.getTime()) / 1000));
+
+      const resumeElapsedSeconds = Math.max(backendElapsedSeconds, calculatedFromStartSeconds);
 
       setSessionId(activeSession.id);
-      setElapsed((activeSession.elapsed_minutes || 0) * 60);
+      setElapsed(resumeElapsedSeconds);
       setIsRunning(true);
       setOrphanedSession(activeSession);
       setShowOrphanOptions(false);

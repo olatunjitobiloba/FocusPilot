@@ -11,8 +11,11 @@ router = APIRouter(prefix="/sessions", tags=["Sessions"])
 security = HTTPBearer()
 
 
-def parse_session_datetime(value: str) -> datetime:
-    parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+def parse_session_datetime(value) -> datetime:
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed
@@ -20,16 +23,21 @@ def parse_session_datetime(value: str) -> datetime:
 
 def get_elapsed_minutes_from_start(start_time_value) -> int:
     if not start_time_value:
-        print(f"⚠️  start_time_value is None or empty")
         return 0
     try:
-        print(f"📅 Parsing start_time: {start_time_value} (type: {type(start_time_value)})")
         start_time = parse_session_datetime(start_time_value)
-        elapsed = max(0, int((datetime.now(timezone.utc) - start_time).total_seconds() / 60))
-        print(f"✓ Calculated elapsed minutes: {elapsed}")
-        return elapsed
-    except Exception as e:
-        print(f"❌ Error parsing start_time '{start_time_value}': {e}")
+        return max(0, int((datetime.now(timezone.utc) - start_time).total_seconds() / 60))
+    except Exception:
+        return 0
+
+
+def get_elapsed_seconds_from_start(start_time_value) -> int:
+    if not start_time_value:
+        return 0
+    try:
+        start_time = parse_session_datetime(start_time_value)
+        return max(0, int((datetime.now(timezone.utc) - start_time).total_seconds()))
+    except Exception:
         return 0
 
 
@@ -98,7 +106,7 @@ def end_session(
 
     # Calculate duration safely (fallback to 0 if start_time is malformed)
     end_time = datetime.now(timezone.utc)
-    duration = get_elapsed_minutes_from_start(session.data.get('start_time'))
+    duration = max(0, int(get_elapsed_seconds_from_start(session.data.get('start_time')) / 60))
 
     # Update session
     result = supabase.table('focus_sessions').update({
@@ -127,9 +135,8 @@ def get_active_session(user_id: str = Depends(get_current_user_id)):
         return {"active": False, "session": None}
 
     session_data = result.data[0]
-    print(f"📊 Active session data from DB: {session_data}")
-    print(f"📅 start_time from DB: '{session_data.get('start_time')}' (type: {type(session_data.get('start_time'))})")
-    elapsed = get_elapsed_minutes_from_start(session_data.get('start_time'))
+    elapsed_seconds = get_elapsed_seconds_from_start(session_data.get('start_time'))
+    elapsed = max(0, int(elapsed_seconds / 60))
 
     return {
         "active": True,
@@ -138,6 +145,7 @@ def get_active_session(user_id: str = Depends(get_current_user_id)):
             "user_id": session_data['user_id'],
             "start_time": session_data['start_time'],
             "distraction_count": session_data.get('distraction_count', 0),
+            "elapsed_seconds": elapsed_seconds,
             "elapsed_minutes": elapsed
         }
     }
