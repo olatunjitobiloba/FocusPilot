@@ -1,5 +1,5 @@
 // extension/src/background/background.js
-const API_URL = 'https://OlatunjiTobi-focusflow-agent.hf.space';
+const API_URL = 'https://OlatunjiTobi-focuspilot-agent.hf.space';
 
 let activeSession = null;
 let blockedDomains = [];

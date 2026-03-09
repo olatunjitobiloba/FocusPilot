@@ -1,5 +1,5 @@
 // popup.js
-const API_URL = "https://OlatunjiTobi-focusflow-agent.hf.space";
+const API_URL = "https://OlatunjiTobi-focuspilot-agent.hf.space";
 
 // DOM elements
 const authView = document.getElementById('authView');
