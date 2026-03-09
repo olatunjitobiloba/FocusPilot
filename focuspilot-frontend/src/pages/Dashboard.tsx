@@ -94,23 +94,6 @@ export default function Dashboard() {
   const [error, setError] = useState<string>('');
   const navigate = useNavigate();
 
-  const cleanupOrphanedSession = useCallback(async () => {
-    try {
-      const activeSessionRes = await api.get('/sessions/active');
-      if (activeSessionRes.data.active && activeSessionRes.data.session) {
-        const session = activeSessionRes.data.session;
-        await api.post('/sessions/end', {
-          session_id: session.id,
-          focus_score: 5,
-          distraction_count: 0
-        });
-        console.log('Cleaned up orphaned session:', session.id);
-      }
-    } catch (orphanErr) {
-      console.warn('Could not check for orphaned sessions:', orphanErr);
-    }
-  }, []);
-
   const loadDashboardData = useCallback(async (isInitialLoad = false) => {
     try {
       const token = localStorage.getItem('token');
@@ -251,8 +234,6 @@ export default function Dashboard() {
           console.warn('Could not load session summary:', summaryErr);
         });
 
-      // Clean orphaned session in background (non-blocking)
-      cleanupOrphanedSession();
     } catch (error) {
       console.error('Error loading dashboard:', error);
       const errorMessage = (error as any).response?.data?.detail || (error as any).message || 'Failed to load dashboard data';
@@ -267,7 +248,7 @@ export default function Dashboard() {
       }
       setIsRefreshing(false);
     }
-  }, [cleanupOrphanedSession, navigate]);
+  }, [navigate]);
 
   useEffect(() => {
     const cached = localStorage.getItem(DASHBOARD_CACHE_KEY);
