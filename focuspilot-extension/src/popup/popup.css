@@ -94,6 +94,38 @@ button:hover {
   font-weight: bold;
 }
 
+.session-timer {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', 'Segoe UI Mono', 'Roboto Mono', 'Courier New', monospace;
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: white;
+  margin: 0;
+}
+
+.session-timer-section {
+  display: none;
+  text-align: center;
+  margin: 12px 0;
+  padding: 20px 15px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+}
+
+.session-timer-section.active {
+  display: block;
+}
+
+.session-timer-label {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
 .btn-start-session {
   background: #16a34a;
   color: white;

@@ -10,7 +10,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   if (message.action === 'startSession') {
     console.log('Starting session with ID:', message.sessionId);
-    startSession(message.sessionId, message.token).then(() => {
+    startSession(message.sessionId, message.token, message.sessionStartTime).then(() => {
       console.log('✓ Session started successfully');
       sendResponse({ success: true });
     }).catch((error) => {
@@ -37,10 +37,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  else if (message.action === 'refreshBlocklist') {
+    if (!activeSession) {
+      sendResponse({ success: true, skipped: true, reason: 'No active session' });
+      return false;
+    }
+
+    refreshBlocklistRules(message.token).then((count) => {
+      sendResponse({ success: true, blockedCount: count });
+    }).catch((error) => {
+      sendResponse({ success: false, error: error.message });
+    });
+    return true;
+  }
 });
 
 // START SESSION
-async function startSession(sessionId, tokenFromMessage) {
+async function startSession(sessionId, tokenFromMessage, sessionStartTimeFromMessage) {
   console.log('Starting session:', sessionId);
   console.log('Token from message:', tokenFromMessage ? `${tokenFromMessage.substring(0, 20)}...` : 'null');
   activeSession = sessionId;
@@ -52,30 +66,36 @@ async function startSession(sessionId, tokenFromMessage) {
   if (!token) {
     throw new Error('Not authenticated. Please log in.');
   }
+
+  let resolvedSessionStartTime = Date.now();
+  if (typeof sessionStartTimeFromMessage === 'number' && Number.isFinite(sessionStartTimeFromMessage)) {
+    resolvedSessionStartTime = sessionStartTimeFromMessage;
+  } else if (typeof sessionStartTimeFromMessage === 'string' && sessionStartTimeFromMessage.trim()) {
+    const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(sessionStartTimeFromMessage);
+    const normalized = hasTimezone ? sessionStartTimeFromMessage : `${sessionStartTimeFromMessage}Z`;
+    const parsedStartTime = new Date(normalized).getTime();
+    if (!Number.isNaN(parsedStartTime)) {
+      resolvedSessionStartTime = parsedStartTime;
+    }
+  }
   
   try {
-    console.log('Fetching blocklist from:', `${API_URL}/blocklist/`);
-    const response = await fetch(`${API_URL}/blocklist/`, {
-      headers: { 
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
+    // Reset session timers when starting a new session
+    const now = resolvedSessionStartTime;
+    await new Promise((resolve) => {
+      chrome.storage.local.set(
+        { 
+          sessionStartTime: now,
+          activeSessionId: sessionId,
+          blocksPrevented: 0  // Reset blocks counter
+        },
+        resolve
+      );
     });
+    console.log('✓ Session timers reset. Start time:', now, 'Session ID:', sessionId);
+    console.log('✓ Storing activeSessionId:', sessionId);
     
-    console.log('Blocklist response status:', response.status);
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Blocklist API error response:', errorText);
-      throw new Error(`API error: ${response.status} - ${errorText}`);
-    }
-    
-    const data = await response.json();
-    blockedDomains = data.blocklist.map(item => item.domain);
-    
-    console.log('Blocklist fetched:', blockedDomains);
-    
-    // Apply blocking rules
-    await applyBlockingRules();
+    await refreshBlocklistRules(token);
     
     // Start activity monitoring
     startActivityMonitoring();
@@ -95,12 +115,57 @@ async function startSession(sessionId, tokenFromMessage) {
   }
 }
 
+async function refreshBlocklistRules(tokenFromMessage) {
+  const token = tokenFromMessage || (await getToken());
+
+  if (!token) {
+    throw new Error('Not authenticated. Please log in.');
+  }
+
+  const response = await fetch(`${API_URL}/blocklist/`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  console.log('Blocklist response status:', response.status);
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Blocklist API error response:', errorText);
+    if (response.status === 401) {
+      await new Promise((resolve) => {
+        chrome.storage.local.remove(['token', 'user', 'activeSessionId', 'sessionStartTime', 'blocksPrevented'], resolve);
+      });
+      activeSession = null;
+      blockedDomains = [];
+      await removeBlockingRules();
+      throw new Error('Authentication expired. Please log in again.');
+    }
+    throw new Error(`API error: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  blockedDomains = (data.blocklist || []).map((item) => item.domain);
+  console.log('Blocklist fetched:', blockedDomains);
+
+  await applyBlockingRules();
+  return blockedDomains.length;
+}
+
 // END SESSION
 async function endSession() {
   console.log('Ending session');
   
   activeSession = null;
   blockedDomains = [];
+  
+  // Clear session timers from storage
+  await new Promise((resolve) => {
+    chrome.storage.local.remove(['sessionStartTime', 'activeSessionId', 'blocksPrevented'], resolve);
+  });
+  console.log('✓ Session timers cleared from storage');
   
   // Remove blocking rules
   await removeBlockingRules();
@@ -141,7 +206,6 @@ async function applyBlockingRules() {
   const uniqueDomains = [...new Set(normalizedDomains)];
 
   console.log('Normalized domains to block:', uniqueDomains);
-
   const rules = uniqueDomains.map((domain, index) => ({
     id: index + 1,
     priority: 1,
@@ -152,7 +216,7 @@ async function applyBlockingRules() {
       }
     },
     condition: {
-      requestDomains: [domain],
+      urlFilter: `||${domain}^`,
       resourceTypes: ['main_frame']
     }
   }));
@@ -326,16 +390,19 @@ function saveToken(token) {
   });
 }
 
-// Initialize on install
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('FocusPilot extension installed');
-  
-  // Create context menu item
-  chrome.contextMenus.create({
-    id: 'addToBlocklist',
-    title: 'Add to FocusPilot Blocklist',
-    contexts: ['page']
-  });
+// Initialize on install/update
+chrome.runtime.onInstalled.addListener(async (details) => {
+  console.log('FocusPilot extension installed/updated:', details?.reason || 'unknown');
+
+  try {
+    chrome.contextMenus.create({
+      id: 'addToBlocklist',
+      title: 'Add to FocusPilot Blocklist',
+      contexts: ['page']
+    });
+  } catch (error) {
+    console.log('Context menu already exists or could not be created:', error?.message || error);
+  }
 });
 
 // Handle context menu clicks
@@ -378,20 +445,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         if (activeSession) {
           console.log('Active session detected. Refreshing blocking rules...');
           try {
-            const blocklistResponse = await fetch(`${API_URL}/blocklist/`, {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              }
-            });
-            
-            if (blocklistResponse.ok) {
-              const blocklistData = await blocklistResponse.json();
-              blockedDomains = blocklistData.blocklist.map(item => item.domain);
-              console.log('Updated blocklist:', blockedDomains);
-              await applyBlockingRules();
-              console.log('✓ Blocking rules refreshed with new domain');
-            }
+            await refreshBlocklistRules(token);
+            console.log('✓ Blocking rules refreshed with new domain');
           } catch (refreshError) {
             console.error('Failed to refresh blocking rules:', refreshError);
           }

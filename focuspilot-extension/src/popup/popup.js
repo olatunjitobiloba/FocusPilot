@@ -10,6 +10,11 @@ const startSessionBtn = document.getElementById('startSessionBtn');
 const endSessionBtn = document.getElementById('endSessionBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 
+// Timer state
+let timerInterval = null;
+let timerAnimationFrame = null;
+let timerResyncInterval = null;
+
 // Check if user is logged in
 chrome.storage.local.get(['token', 'user'], (result) => {
   if (result.token) {
@@ -27,6 +32,7 @@ function showAuth() {
 function showDashboard(user) {
   authView.style.display = 'none';
   dashboardView.classList.add('active');
+  hydrateDashboardFromCache();
   loadStats();
   loadSessionState();
 }
@@ -54,11 +60,99 @@ function removeStorage(keys) {
   });
 }
 
+function parseSessionStartTimeToMillis(startTime) {
+  if (!startTime) return Date.now();
+
+  const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(startTime);
+  const normalized = hasTimezone ? startTime : `${startTime}Z`;
+  const parsed = new Date(normalized).getTime();
+
+  return Number.isNaN(parsed) ? Date.now() : parsed;
+}
+
+function formatFocusMinutes(totalMinutes) {
+  const safeMinutes = Math.max(0, Math.round(totalMinutes || 0));
+  return `${Math.floor(safeMinutes / 60)}h ${safeMinutes % 60}m`;
+}
+
+async function hydrateDashboardFromCache() {
+  try {
+    const {
+      cachedDailyFocusMinutes,
+      cachedStreak,
+      activeSessionId,
+      sessionStartTime,
+    } = await getStorage([
+      'cachedDailyFocusMinutes',
+      'cachedStreak',
+      'activeSessionId',
+      'sessionStartTime',
+    ]);
+
+    if (typeof cachedDailyFocusMinutes === 'number') {
+      document.getElementById('focusTime').textContent = formatFocusMinutes(cachedDailyFocusMinutes);
+    }
+
+    if (typeof cachedStreak === 'number') {
+      document.getElementById('streak').textContent = `${cachedStreak} days`;
+    }
+
+    if (activeSessionId && sessionStartTime) {
+      setSessionButtons(true);
+      startPopupTimer(sessionStartTime);
+    }
+  } catch (error) {
+    console.error('Failed to hydrate popup from cache:', error);
+  }
+}
+
+function startPopupTimer(sessionStartTime) {
+  const timerSection = document.getElementById('sessionTimerSection');
+  const timerDisplay = document.getElementById('sessionTimer');
+
+  if (timerSection) timerSection.classList.add('active');
+
+  // Clear any existing intervals/frames
+  if (timerInterval) clearInterval(timerInterval);
+  if (timerAnimationFrame) cancelAnimationFrame(timerAnimationFrame);
+
+  // Update immediately
+  const updateTimer = () => {
+    if (!timerDisplay) return;
+    const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+    const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+    const seconds = (elapsed % 60).toString().padStart(2, '0');
+    timerDisplay.textContent = `${minutes}:${seconds}`;
+    
+    timerAnimationFrame = requestAnimationFrame(updateTimer);
+  };
+
+  updateTimer();
+}
+
+function stopPopupTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  if (timerAnimationFrame) {
+    cancelAnimationFrame(timerAnimationFrame);
+    timerAnimationFrame = null;
+  }
+  if (timerResyncInterval) {
+    clearInterval(timerResyncInterval);
+    timerResyncInterval = null;
+  }
+  const timerSection = document.getElementById('sessionTimerSection');
+  if (timerSection) timerSection.classList.remove('active');
+}
+
 async function loadSessionState() {
   try {
     const { token } = await getStorage(['token']);
     if (!token) {
       setSessionButtons(false);
+      stopPopupTimer();
       return;
     }
 
@@ -70,19 +164,23 @@ async function loadSessionState() {
 
     if (!response.ok) {
       setSessionButtons(false);
+      stopPopupTimer();
       return;
     }
 
     const data = await response.json();
     if (data?.active && data?.session?.id) {
+      const parsedSessionStartTime = parseSessionStartTimeToMillis(data.session.start_time);
       await setStorage({
         activeSessionId: data.session.id,
-        sessionStartTime: new Date(data.session.start_time).getTime()
+        sessionStartTime: parsedSessionStartTime
       });
       setSessionButtons(true);
+      startPopupTimer(parsedSessionStartTime);
     } else {
       await removeStorage(['activeSessionId', 'sessionStartTime']);
       setSessionButtons(false);
+      stopPopupTimer();
     }
   } catch (error) {
     console.error('Failed to load session state:', error);
@@ -137,13 +235,15 @@ async function loadStats() {
     if (dailyResponse.ok) {
       const stats = await dailyResponse.json();
       const focusMinutes = stats.total_focus_minutes || 0;
-      document.getElementById('focusTime').textContent =
-        `${Math.floor(focusMinutes / 60)}h ${focusMinutes % 60}m`;
+      document.getElementById('focusTime').textContent = formatFocusMinutes(focusMinutes);
+      await setStorage({ cachedDailyFocusMinutes: focusMinutes });
     }
 
     if (weeklyResponse.ok) {
       const weekly = await weeklyResponse.json();
-      document.getElementById('streak').textContent = `${weekly.current_streak || 0} days`;
+      const currentStreak = weekly.current_streak || 0;
+      document.getElementById('streak').textContent = `${currentStreak} days`;
+      await setStorage({ cachedStreak: currentStreak });
     }
   } catch (error) {
     console.error('Failed to load stats:', error);
@@ -173,25 +273,38 @@ async function startSession() {
     }
 
     const data = await response.json();
-    const sessionId = data?.session?.id;
+    const session = data?.session;
+    const sessionId = session?.id;
 
     if (!sessionId) {
       throw new Error('Session ID missing from server response');
     }
 
-    chrome.runtime.sendMessage({ action: 'startSession', sessionId, token }, async (runtimeResponse) => {
+    const parsedSessionStartTime = parseSessionStartTimeToMillis(session?.start_time);
+
+    // Notify dashboard immediately
+    window.top?.postMessage({
+      source: 'focuspilot-extension',
+      action: 'startSession'
+    }, '*');
+
+    chrome.runtime.sendMessage(
+      { action: 'startSession', sessionId, token, sessionStartTime: parsedSessionStartTime },
+      async (runtimeResponse) => {
       if (runtimeResponse && runtimeResponse.success) {
         await setStorage({
           activeSessionId: sessionId,
-          sessionStartTime: Date.now(),
+          sessionStartTime: parsedSessionStartTime,
           blocksPrevented: 0
         });
         setSessionButtons(true);
+        startPopupTimer(parsedSessionStartTime);
         loadStats();
       } else {
         alert(runtimeResponse?.error || 'Failed to start extension blocking');
       }
-    });
+      }
+    );
   } catch (error) {
     console.error('Failed to start session:', error);
     alert('Could not start session. Please try again.');
@@ -205,6 +318,18 @@ async function endSession() {
       alert('Please log in first.');
       return;
     }
+
+    // Optimistic UI update for instant feedback
+    window.top?.postMessage({
+      source: 'focuspilot-extension',
+      action: 'endSession'
+    }, '*');
+
+    chrome.runtime.sendMessage({ action: 'endSession' }, async () => {
+      await removeStorage(['activeSessionId', 'sessionStartTime']);
+      setSessionButtons(false);
+      stopPopupTimer();
+    });
 
     let sessionId = activeSessionId;
 
@@ -235,11 +360,7 @@ async function endSession() {
       });
     }
 
-    chrome.runtime.sendMessage({ action: 'endSession' }, async () => {
-      await removeStorage(['activeSessionId', 'sessionStartTime']);
-      setSessionButtons(false);
-      loadStats();
-    });
+    loadStats();
   } catch (error) {
     console.error('Failed to end session:', error);
     alert('Could not end session. Please try again.');
