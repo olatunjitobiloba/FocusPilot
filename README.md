@@ -1,6 +1,6 @@
 <div align="center">
 
-#  FocusPilot
+# FocusPilot
 
 ### AI-Powered Productivity OS — Learn Your Patterns. Block Distractions. Own Your Focus.
 
@@ -13,15 +13,30 @@
 
 ---
 
-##  Demo
+## Demo
 
-[![FocusPilot Demo](https://img.youtube.com/vi/y9jI2dACznU/0.jpg)](https://www.youtube.com/watch?v=y9jI2dACznU)
+[![FocusPilot Demo](https://img.youtube.com/vi/y9jI2dACznU/maxresdefault.jpg)](https://www.youtube.com/watch?v=y9jI2dACznU)
 
-> 👆 Click to watch the full demo
+> Click to watch the full demo
 
 ---
 
-## 🧠 What is FocusPilot?
+## The Problem
+
+The average person loses **3–5 hours every day to distraction**.
+
+Most productivity tools:
+- treat every user the same
+- rely on manual discipline
+- lack behavioral intelligence
+
+FocusPilot takes a different approach.
+
+Instead of forcing rigid systems, it **learns your behavioral patterns** and adapts your environment to protect your focus.
+
+---
+
+## What is FocusPilot?
 
 FocusPilot is an **AI-powered productivity operating system** that doesn't just block distractions — it *learns you.*
 
@@ -31,22 +46,42 @@ Most focus tools treat everyone the same. FocusPilot builds your **personal prod
 
 ---
 
-##  Features Built (MVP)
+## Features Built (MVP)
 
 | Feature | Status |
 |--------|--------|
-| Full Authentication System (JWT) |  Done |
-| Session Tracking with Activity Logging |  Done |
-| Website Blocking via Chrome Extension |  Done |
-| Analytics Dashboard with Charts |  Done |
-| ML Distraction Scorer (4-Factor Algorithm) |  Done |
-| AI-Powered Site Suggestions |  Done |
-| 35 Backend Tests Passing |  Done |
-| 14 Frontend Tests Passing |  Done |
+| Full Authentication System (JWT) | Done |
+| Session Tracking with Activity Logging | Done |
+| Website Blocking via Chrome Extension | Done |
+| Analytics Dashboard with Charts | Done |
+| ML Distraction Scorer (4-Factor Algorithm) | Done |
+| AI-Powered Site Suggestions | Done |
+| 35 Backend Tests Passing | Done |
+| 14 Frontend Tests Passing | Done |
 
 ---
 
-##  Tech Stack
+## Engineering Challenges Solved
+
+**1. Real-time behavioral signal collection**
+Detecting distraction patterns required capturing browser activity events while maintaining low extension overhead.
+
+**2. ML scoring pipeline**
+Designed a 4-factor distraction scoring model combining:
+- Tab switching frequency
+- Dwell time
+- Site category
+- User focus sessions
+
+**3. Browser to Backend synchronization**
+Implemented secure communication between the Chrome extension and FastAPI backend using authenticated API requests.
+
+**4. Low-latency productivity insights**
+Ensured real-time feedback without interrupting user workflow.
+
+---
+
+## Tech Stack
 
 ### Frontend
 - **React** + **Vite**
@@ -73,7 +108,48 @@ Most focus tools treat everyone the same. FocusPilot builds your **personal prod
 
 ---
 
-##  Getting Started
+## System Architecture
+
+```
+User Browser
+     |
+     v
+Chrome Extension (MV3)
+     |
+     | Activity Signals
+     v
+FastAPI Backend
+     |
+     |-- ML Distraction Scorer
+     |-- Behavior Analysis
+     |-- AI Site Suggestions
+     |
+     v
+Supabase (PostgreSQL + Auth)
+     |
+     v
+React Dashboard
+     |
+     v
+User Productivity Insights
+```
+
+---
+
+## Screenshots
+
+### Dashboard
+![alt text](<Screenshot 2026-03-10 171228.png>)
+
+### Focus Session Tracking
+![alt text](image.png)
+
+### Website Blocking
+![alt text](image-1.png)
+
+---
+
+## Getting Started
 
 ### Prerequisites
 - Node.js v18+
@@ -115,7 +191,7 @@ uvicorn main:app --reload
 
 ### 4. Chrome Extension Setup
 
-1. Open Chrome → go to `chrome://extensions/`
+1. Open Chrome and go to `chrome://extensions/`
 2. Enable **Developer Mode** (top right)
 3. Click **Load unpacked**
 4. Select the `focuspilot-extension/` folder
@@ -123,7 +199,7 @@ uvicorn main:app --reload
 
 ---
 
-##  Running Tests
+## Running Tests
 
 ### Backend (35 tests)
 ```bash
@@ -139,7 +215,7 @@ npm run test
 
 ---
 
-##  Project Structure
+## Project Structure
 
 ```
 FocusPilot/
@@ -152,17 +228,17 @@ FocusPilot/
 
 ---
 
-##  Live Links
+## Live Links
 
 | Resource | Link |
 |----------|------|
-|  Live App | [focuspilot.vercel.app](https://focuspilot.vercel.app) |
-|  Demo Video | [Watch on YouTube](https://www.youtube.com/watch?v=y9jI2dACznU) |
-|  GitHub Repo | [olatunjitobiloba/FocusPilot](https://github.com/olatunjitobiloba/FocusPilot) |
+| Live App | [focuspilot.vercel.app](https://focuspilot.vercel.app) |
+| Demo Video | [Watch on YouTube](https://www.youtube.com/watch?v=y9jI2dACznU) |
+| GitHub Repo | [olatunjitobiloba/FocusPilot](https://github.com/olatunjitobiloba/FocusPilot) |
 
 ---
 
-##  Roadmap
+## Roadmap
 
 - [ ] Productivity DNA Profile (K-Means clustering)
 - [ ] Smart Timetable Generator
@@ -173,14 +249,14 @@ FocusPilot/
 
 ---
 
-##  Contributing
+## Contributing
 
 Contributions, issues, and feature requests are welcome!
 Feel free to open an issue or submit a pull request.
 
 ---
 
-##  License
+## License
 
 This project is licensed under the **MIT License**.
 
@@ -192,6 +268,6 @@ This project is licensed under the **MIT License**.
 
 *Hope is not a strategy. Execution is.*
 
-⭐ Star this repo if FocusPilot resonates with you!
+Star this repo if this project helped or inspired you.
 
 </div>
