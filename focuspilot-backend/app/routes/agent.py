@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends
 from app.auth import get_current_user_id
 from app.database import get_supabase
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
 
@@ -41,7 +41,7 @@ def update_agent_state(
     # Update agent state
     result = supabase.table('agent_state').update({
         'state': state_data,
-        'updated_at': datetime.utcnow().isoformat()
+        'updated_at': datetime.now(timezone.utc).isoformat()
     }).eq('user_id', user_id).execute()
     
     return {"message": "State updated", "data": result.data}

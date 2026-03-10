@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from app.auth import get_current_user_id
 from app.database import get_supabase
 from app.domain_whitelist import filter_activities_by_domain
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 import re
 
@@ -35,7 +35,7 @@ def get_recommendations(user_id: str = Depends(get_current_user_id)):
     supabase = get_supabase()
     
     # Get recent data (last 14 days)
-    start_date = (datetime.utcnow() - timedelta(days=14)).isoformat()
+    start_date = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
     
     sessions_result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).gte('start_time', start_date).execute()
     

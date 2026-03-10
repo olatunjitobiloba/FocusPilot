@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from app.auth import get_current_user_id
 from app.database import get_supabase
 from app.domain_whitelist import is_whitelisted_domain
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 router = APIRouter(prefix="/stats", tags=["Statistics"])
 
@@ -162,7 +162,7 @@ def calculate_streak(user_id: str, supabase):
     
     # Count consecutive days from today
     streak = 0
-    current_date = datetime.utcnow().date()
+    current_date = datetime.now(timezone.utc).date()
     
     while current_date.isoformat() in dates:
         streak += 1

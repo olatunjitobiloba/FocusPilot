@@ -4,7 +4,7 @@ from app.auth import get_current_user_id
 from app.database import get_supabase
 from app.domain_whitelist import filter_activities_by_domain, is_whitelisted_domain
 from app.ml.distraction_scorer import DistractionScorer
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 router = APIRouter(prefix="/suggestions", tags=["Site Suggestions"])
 
@@ -21,7 +21,7 @@ def get_site_suggestions(user_id: str = Depends(get_current_user_id)):
     supabase = get_supabase()
 
     # Fetch last 14 days of data
-    start_date = (datetime.utcnow() - timedelta(days=14)).isoformat()
+    start_date = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
 
     sessions_result = (
         supabase.table('focus_sessions')
@@ -176,7 +176,7 @@ def get_domain_score(
     )
     already_blocked = len(blocklist_result.data) > 0
 
-    start_date = (datetime.utcnow() - timedelta(days=14)).isoformat()
+    start_date = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
 
     sessions_result = (
         supabase.table('focus_sessions')

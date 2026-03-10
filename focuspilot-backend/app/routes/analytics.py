@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Query
 from app.auth import get_current_user_id
 from app.database import get_supabase
 from app.domain_whitelist import filter_activities_by_domain
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from typing import Optional
 
@@ -21,7 +21,7 @@ def get_distraction_analysis(
     supabase = get_supabase()
     
     # Get browsing activity from last N days
-    start_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    start_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     
     result = supabase.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute()
     
@@ -78,7 +78,7 @@ def get_time_breakdown(
     supabase = get_supabase()
     
     # Get sessions and activities
-    start_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    start_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     
     sessions_result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).gte('start_time', start_date).execute()
     
@@ -119,7 +119,7 @@ def get_hourly_pattern(
     """
     supabase = get_supabase()
     
-    start_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    start_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     
     result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).gte('start_time', start_date).execute()
     

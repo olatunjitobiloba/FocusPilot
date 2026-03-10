@@ -250,9 +250,9 @@ def log_activity(
     supabase = get_supabase()
 
     # Verify session belongs to user
-    session = supabase.table('focus_sessions').select("*").eq('id', session_id).eq('user_id', user_id).single().execute()
+    session_result = supabase.table('focus_sessions').select("*").eq('id', session_id).eq('user_id', user_id).limit(1).execute()
 
-    if not session.data:
+    if not session_result.data:
         raise HTTPException(status_code=404, detail="Session not found")
 
     if is_whitelisted_domain(activity.domain):
