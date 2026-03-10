@@ -19,9 +19,10 @@ interface SuggestionCardProps {
   };
   onAccept: (domain: string) => void | Promise<void>;
   onDismiss: (domain: string) => void | Promise<void>;
+  onMarkProductive: (domain: string) => void | Promise<void>;
 }
 
-function SuggestionCard({ suggestion, onAccept, onDismiss }: SuggestionCardProps) {
+function SuggestionCard({ suggestion, onAccept, onDismiss, onMarkProductive }: SuggestionCardProps) {
   const [showDetails, setShowDetails] = useState(false);
 
   const score = Math.max(0, Math.min(100, suggestion.distraction_score ?? 0));
@@ -122,6 +123,12 @@ function SuggestionCard({ suggestion, onAccept, onDismiss }: SuggestionCardProps
           className="flex-1 bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition text-sm"
         >
           Block This Site
+        </button>
+        <button
+          onClick={() => onMarkProductive(suggestion.domain)}
+          className="px-4 py-2 border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition text-sm"
+        >
+          Productive
         </button>
         <button
           onClick={() => onDismiss(suggestion.domain)}

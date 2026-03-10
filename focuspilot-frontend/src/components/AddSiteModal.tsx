@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 interface AddSiteModalProps {
   onAdd: (domain: string, reason?: string) => Promise<void> | void;
   onClose: () => void;
+  title?: string;
+  submitLabel?: string;
 }
 
 const COMMON_SITES = [
@@ -16,7 +18,12 @@ const COMMON_SITES = [
   { domain: 'twitch.tv', label: 'Twitch' },
 ];
 
-function AddSiteModal({ onAdd, onClose }: AddSiteModalProps) {
+function AddSiteModal({
+  onAdd,
+  onClose,
+  title = 'Add Site to Block',
+  submitLabel = 'Block Site',
+}: AddSiteModalProps) {
   const [domain, setDomain] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
@@ -46,18 +53,21 @@ function AddSiteModal({ onAdd, onClose }: AddSiteModalProps) {
     try {
       await onAdd(cleanDomain, reason || undefined);
       onClose();
-    } catch {
-      setError('Failed to add site. Try again.');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to add site. Try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleQuickAdd = async (quickDomain: string) => {
+    setError('');
     setLoading(true);
     try {
       await onAdd(quickDomain);
       onClose();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to add site. Try again.');
     } finally {
       setLoading(false);
     }
@@ -72,7 +82,7 @@ function AddSiteModal({ onAdd, onClose }: AddSiteModalProps) {
     >
       <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Add Site to Block</h2>
+          <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
@@ -150,7 +160,7 @@ function AddSiteModal({ onAdd, onClose }: AddSiteModalProps) {
               disabled={loading}
               className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-400 transition"
             >
-              {loading ? 'Adding...' : 'Block Site'}
+              {loading ? 'Adding...' : submitLabel}
             </button>
             <button
               type="button"

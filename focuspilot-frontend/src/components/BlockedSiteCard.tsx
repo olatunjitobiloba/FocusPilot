@@ -9,9 +9,10 @@ interface BlockedSiteCardProps {
     created_at?: string;
   };
   onRemove: (domain: string) => void | Promise<void>;
+  onMarkProductive?: (domain: string) => void | Promise<void>;
 }
 
-function BlockedSiteCard({ item, onRemove }: BlockedSiteCardProps) {
+function BlockedSiteCard({ item, onRemove, onMarkProductive }: BlockedSiteCardProps) {
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('en-US', {
       month: 'short',
@@ -50,13 +51,24 @@ function BlockedSiteCard({ item, onRemove }: BlockedSiteCardProps) {
         </div>
       </div>
 
-      <button
-        onClick={() => onRemove(item.domain)}
-        className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition"
-        title="Remove from blocklist"
-      >
-        Remove
-      </button>
+      <div className="flex items-center gap-2">
+        {onMarkProductive && (
+          <button
+            onClick={() => onMarkProductive(item.domain)}
+            className="text-green-600 hover:text-green-700 hover:bg-green-50 p-2 rounded-lg transition"
+            title="Mark as productive"
+          >
+            Productive
+          </button>
+        )}
+        <button
+          onClick={() => onRemove(item.domain)}
+          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition"
+          title="Remove from blocklist"
+        >
+          Remove
+        </button>
+      </div>
     </div>
   );
 }

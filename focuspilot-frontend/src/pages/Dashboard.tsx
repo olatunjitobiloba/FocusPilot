@@ -4,7 +4,7 @@ import {
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, whitelistAPI } from '../api/client';
 import SessionControl from '../components/SessionControl';
 import Navbar from '../components/Navbar';
 
@@ -96,6 +96,7 @@ export default function Dashboard() {
   const [distractionData, setDistractionData] = useState<DistractionData[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [error, setError] = useState<string>('');
+  const [actionMessage, setActionMessage] = useState<string>('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -319,6 +320,55 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Auto-refresh dashboard data every 10 seconds during active session
+  useEffect(() => {
+    const refreshInterval = setInterval(() => {
+      loadDashboardData(false);
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(refreshInterval);
+  }, [loadDashboardData]);
+
+  const notifyExtensionBlocklistChanged = () => {
+    const token = localStorage.getItem('token');
+    window.postMessage(
+      {
+        source: 'focuspilot-web',
+        action: 'refreshBlocklist',
+        token,
+      },
+      '*'
+    );
+  };
+
+  const showActionMessage = (message: string) => {
+    setActionMessage(message);
+    window.setTimeout(() => setActionMessage(''), 3000);
+  };
+
+  const normalizeDomain = (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .split('/')[0];
+
+  const handleMarkProductive = async (domain: string) => {
+    const normalizedDomain = normalizeDomain(domain);
+
+    try {
+      await whitelistAPI.add(normalizedDomain);
+      notifyExtensionBlocklistChanged();
+      setDistractionData((prev) => prev.filter((item) => normalizeDomain(item.name) !== normalizedDomain));
+      showActionMessage(`${normalizedDomain} marked as productive`);
+      loadDashboardData(false);
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || 'Failed to mark site as productive';
+      setError(detail);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -367,6 +417,12 @@ export default function Dashboard() {
               </div>
             )}
 
+            {actionMessage && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg">
+                <p className="text-sm">{actionMessage}</p>
+              </div>
+            )}
+
             {!stats && !error && (
               <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
                 <p className="text-sm">Loading dashboard data...</p>
@@ -396,26 +452,26 @@ export default function Dashboard() {
               <StatCard
                 icon="TF"
                 label="Today's Focus"
-                value={`${stats.todayHours.toFixed(1)}h`}
-                sub={`${stats.todaySessions} sessions`}
+                value={`${(stats?.todayHours ?? 0).toFixed(1)}h`}
+                sub={`${stats?.todaySessions ?? 0} sessions`}
               />
               <StatCard
                 icon="ST"
                 label="Streak"
-                value={`${stats.streak} days`}
+                value={`${stats?.streak ?? 0} days`}
                 sub="Keep it going!"
               />
               <StatCard
                 icon="TT"
                 label="Total Focus"
-                value={`${stats.totalHours.toFixed(1)}h`}
-                sub={`${stats.totalSessions} sessions`}
+                value={`${(stats?.totalHours ?? 0).toFixed(1)}h`}
+                sub={`${stats?.totalSessions ?? 0} sessions`}
               />
               <StatCard
                 icon="SC"
                 label="Avg Score"
-                value={`${stats.avgScore.toFixed(1)}/10`}
-                sub={`${stats.avgMinPerSession.toFixed(1)} min/session`}
+                value={`${(stats?.avgScore ?? 0).toFixed(1)}/10`}
+                sub={`${(stats?.avgMinPerSession ?? 0).toFixed(1)} min/session`}
               />
             </div>
 
@@ -445,23 +501,51 @@ export default function Dashboard() {
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <h2 className="text-base font-bold text-gray-700 mb-4">Top Distractions</h2>
                 {distractionData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={distractionData}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={70}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                      >
-                        {distractionData.map((_, i) => (
-                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v) => [`${v} min`, 'Time spent']} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={distractionData}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={70}
+                          dataKey="value"
+                          label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                        >
+                          {distractionData.map((_, i) => (
+                            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v) => [`${v} min`, 'Time spent']} />
+                      </PieChart>
+                    </ResponsiveContainer>
+
+                    <div className="mt-4 space-y-3">
+                      {distractionData.map((item, index) => (
+                        <div
+                          key={item.name}
+                          className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span
+                              className="h-3 w-3 rounded-full shrink-0"
+                              style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-gray-800 truncate">{item.name}</p>
+                              <p className="text-xs text-gray-500">{item.value} min tracked</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleMarkProductive(item.name)}
+                            className="ml-4 shrink-0 rounded-lg border border-blue-300 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                          >
+                            Productive
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-48 text-gray-400">
                     <p className="text-sm font-medium">No distractions tracked yet!</p>

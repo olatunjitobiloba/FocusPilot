@@ -1,9 +1,23 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 function Navbar() {
   const location = useLocation();
   const activeTab = new URLSearchParams(location.search).get('tab');
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    window.postMessage(
+      {
+        source: 'focuspilot-web',
+        action: 'syncToken',
+        token,
+      },
+      '*'
+    );
+  }, [location.pathname]);
 
   const getDashboardClass = () =>
     location.pathname === '/dashboard' && activeTab !== 'sessions'

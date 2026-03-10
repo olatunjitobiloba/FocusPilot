@@ -26,6 +26,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0); // seconds
+  const [sessionStartTimeMs, setSessionStartTimeMs] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastAction, setLastAction] = useState<'start' | 'end' | null>(null);
   const [error, setError] = useState('');
@@ -38,12 +39,29 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     const response = await api.get('/sessions/active');
     if (response.data?.active && response.data?.session?.id) {
       const activeSession = response.data.session as ActiveSession;
+      const backendElapsedSeconds = typeof activeSession.elapsed_seconds === 'number'
+        ? Math.max(0, activeSession.elapsed_seconds)
+        : Math.max(0, (activeSession.elapsed_minutes || 0) * 60);
+
+      const parsedStartMs = parseSessionStartTimeToMillis(activeSession.start_time);
+      const effectiveStartMs = Number.isNaN(parsedStartMs)
+        ? Date.now() - backendElapsedSeconds * 1000
+        : parsedStartMs;
+
+      setSessionId(activeSession.id);
+      setSessionStartTimeMs(effectiveStartMs);
+      setElapsed(backendElapsedSeconds);
+      setIsRunning(true);
       setOrphanedSession(activeSession);
       setShowOrphanOptions(true);
       setHasActiveSessionConflict(true);
       return true;
     }
 
+    setIsRunning(false);
+    setSessionId(null);
+    setElapsed(0);
+    setSessionStartTimeMs(null);
     setOrphanedSession(null);
     setShowOrphanOptions(false);
     setHasActiveSessionConflict(false);
@@ -73,7 +91,28 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     checkForActiveSession();
   }, [loadActiveSession]);
 
-  const notifyExtension = (action: 'startSession' | 'endSession', currentSessionId?: string) => {
+  // Listen for session events from extension (via postMessage)
+  useEffect(() => {
+    const handleExtensionMessage = (event: MessageEvent) => {
+      if (event.source !== window) return;
+      const { source, action } = event.data;
+
+      if (source === 'focuspilot-extension') {
+        if (action === 'startSession' || action === 'endSession') {
+          setTimeout(() => loadActiveSession(), 100);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleExtensionMessage);
+    return () => window.removeEventListener('message', handleExtensionMessage);
+  }, [loadActiveSession]);
+
+  const notifyExtension = (
+    action: 'startSession' | 'endSession',
+    currentSessionId?: string,
+    sessionStartTime?: string
+  ) => {
     const token = localStorage.getItem('token');
     console.log('Notifying extension:', action, 'Token present?', !!token, token ? `Length: ${token.length}` : 'NO TOKEN');
     window.postMessage(
@@ -81,17 +120,19 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
         source: 'focuspilot-web',
         action,
         sessionId: currentSessionId,
+        sessionStartTime,
         token,
       },
       '*'
     );
   };
 
-  // Timer tick
+  // Timer tick (timestamp-based to avoid drift)
   useEffect(() => {
     if (isRunning) {
+      const startMs = sessionStartTimeMs ?? (Date.now() - elapsed * 1000);
       intervalRef.current = setInterval(() => {
-        setElapsed(prev => prev + 1);
+        setElapsed(Math.max(0, Math.floor((Date.now() - startMs) / 1000)));
       }, 1000);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -99,7 +140,71 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isRunning]);
+  }, [isRunning, sessionStartTimeMs, elapsed]);
+
+  // Silent server resync every 10s while running (keeps parity with extension timer)
+  useEffect(() => {
+    if (!isRunning || !sessionId) return;
+
+    const resync = setInterval(async () => {
+      try {
+        const response = await api.get('/sessions/active');
+        const activeSession = response.data?.active ? response.data?.session as ActiveSession : null;
+
+        if (!activeSession?.id) {
+          setIsRunning(false);
+          setSessionId(null);
+          setElapsed(0);
+          setSessionStartTimeMs(null);
+          setOrphanedSession(null);
+          setShowOrphanOptions(false);
+          setHasActiveSessionConflict(false);
+          onSessionEnd();
+          return;
+        }
+
+        const backendElapsedSeconds = typeof activeSession.elapsed_seconds === 'number'
+          ? Math.max(0, activeSession.elapsed_seconds)
+          : Math.max(0, (activeSession.elapsed_minutes || 0) * 60);
+
+        const parsedStartMs = parseSessionStartTimeToMillis(activeSession.start_time);
+        const effectiveStartMs = Number.isNaN(parsedStartMs)
+          ? Date.now() - backendElapsedSeconds * 1000
+          : parsedStartMs;
+
+        if (activeSession.id !== sessionId) {
+          setSessionId(activeSession.id);
+          setIsRunning(true);
+        }
+
+        setSessionStartTimeMs(effectiveStartMs);
+
+        setElapsed((prev) => {
+          if (Math.abs(prev - backendElapsedSeconds) <= 1) return prev;
+          return backendElapsedSeconds;
+        });
+      } catch {
+        // Keep local timer running even if a resync call fails.
+      }
+    }, 1000);
+
+    return () => clearInterval(resync);
+  }, [isRunning, sessionId, onSessionEnd]);
+
+  // Detect sessions started externally (e.g., extension) while dashboard is idle
+  useEffect(() => {
+    if (isRunning) return;
+
+    const detectExternalStart = setInterval(async () => {
+      try {
+        await loadActiveSession();
+      } catch {
+        // ignore transient errors and keep polling
+      }
+    }, 1000);
+
+    return () => clearInterval(detectExternalStart);
+  }, [isRunning, loadActiveSession]);
 
   // Format seconds → HH:MM:SS
   const formatTime = (secs: number) => {
@@ -130,13 +235,18 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
         ? backendElapsedSeconds
         : calculatedFromStartSeconds;
 
+      const resumeStartMs = Number.isNaN(startTimeMs)
+        ? Date.now() - resumeElapsedSeconds * 1000
+        : startTimeMs;
+
       setSessionId(activeSession.id);
       setElapsed(resumeElapsedSeconds);
+      setSessionStartTimeMs(resumeStartMs);
       setIsRunning(true);
       setOrphanedSession(activeSession);
       setShowOrphanOptions(false);
       setHasActiveSessionConflict(false);
-      notifyExtension('startSession', activeSession.id);
+      notifyExtension('startSession', activeSession.id, activeSession.start_time);
     } catch (err: any) {
       console.error('Error resuming session:', err);
       setError(err.response?.data?.detail || err.message || 'Failed to resume session');
@@ -193,6 +303,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       isRunning,
       sessionId,
       elapsed,
+      sessionStartTimeMs,
       orphanedSession,
       showOrphanOptions,
       hasActiveSessionConflict,
@@ -204,6 +315,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
 
     setIsRunning(true);
     setElapsed(0);
+    setSessionStartTimeMs(Date.now());
     setOrphanedSession(null);
     setShowOrphanOptions(false);
     setHasActiveSessionConflict(false);
@@ -216,16 +328,19 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       }
 
       setSessionId(session.id);
-      setElapsed(0);
+  const parsedStartMs = parseSessionStartTimeToMillis(session.start_time);
+  setSessionStartTimeMs(Number.isNaN(parsedStartMs) ? Date.now() : parsedStartMs);
+  setElapsed(0);
       setIsRunning(true);
       setOrphanedSession(null);
       setShowOrphanOptions(false);
       setHasActiveSessionConflict(false);
-      notifyExtension('startSession', session.id);
+      notifyExtension('startSession', session.id, session.start_time);
     } catch (err: any) {
       setIsRunning(previousState.isRunning);
       setSessionId(previousState.sessionId);
       setElapsed(previousState.elapsed);
+      setSessionStartTimeMs(previousState.sessionStartTimeMs);
       setOrphanedSession(previousState.orphanedSession);
       setShowOrphanOptions(previousState.showOrphanOptions);
       setHasActiveSessionConflict(previousState.hasActiveSessionConflict);
@@ -259,6 +374,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     if (!endingSessionId) return;
 
     const previousElapsed = elapsed;
+    const previousSessionStartTimeMs = sessionStartTimeMs;
 
     setLastAction('end');
     setLoading(true);
@@ -267,6 +383,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     setIsRunning(false);
     setSessionId(null);
     setElapsed(0);
+    setSessionStartTimeMs(null);
     setOrphanedSession(null);
     setShowOrphanOptions(false);
     setHasActiveSessionConflict(false);
@@ -283,12 +400,14 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setIsRunning(true);
       setSessionId(endingSessionId);
       setElapsed(previousElapsed);
+      setSessionStartTimeMs(previousSessionStartTimeMs);
 
       console.error('Session end error:', err);
       setError(err.response?.data?.detail || err.message || 'Could not end session. Try again.');
     } finally {
       setLoading(false);
       setLastAction(null);
+      loadActiveSession();
     }
   };
 

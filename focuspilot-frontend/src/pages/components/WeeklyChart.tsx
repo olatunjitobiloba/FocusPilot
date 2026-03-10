@@ -41,6 +41,18 @@ function WeeklyChart() {
     return <div className="text-center py-8">Loading chart...</div>;
   }
 
+  if (data.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 text-gray-500">
+        <span className="text-4xl mb-3">📊</span>
+        <p className="text-center">No data yet.</p>
+        <p className="text-sm text-center mt-1">
+          Complete your first session to see your weekly chart!
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <ResponsiveContainer width="100%" height={300}>

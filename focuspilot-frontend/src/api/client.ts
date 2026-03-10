@@ -18,6 +18,23 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.clear();
+
+      const currentPath = window.location.pathname;
+      if (!['/login', '/signup', '/'].includes(currentPath)) {
+        window.location.href = '/login';
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 export const authAPI = {
   signup: (email: string, password: string, fullName: string) =>
     api.post('/auth/signup', { email, password, full_name: fullName }),
@@ -51,4 +68,15 @@ export const suggestionsAPI = {
 
   score: (domain: string) =>
     api.get(`/suggestions/score/${domain}`),
+};
+
+export const whitelistAPI = {
+  getAll: () =>
+    api.get('/whitelist/'),
+
+  add: (domain: string) =>
+    api.post('/whitelist/', { domain }),
+
+  remove: (domain: string) =>
+    api.delete(`/whitelist/${domain}`),
 };

@@ -30,47 +30,32 @@ function Login() {
     setError('');
     setLoading(true);
 
-    console.log('Attempting login with:', email); // DEBUG
-
     try {
       const response = await authAPI.login(email, password);
-      
-      console.log('Login response:', response.data); // DEBUG
-      
-      // Save token to localStorage
-      localStorage.setItem('token', response.data.access_token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-      
-      // Sync token to extension
+
+      const { access_token, user } = response.data;
+
+      localStorage.setItem('token', access_token);
+      localStorage.setItem('user', JSON.stringify(user));
+
+      const extensionChrome = window.chrome;
+      if (extensionChrome?.storage?.local) {
+        extensionChrome.storage.local.set({
+          token: access_token,
+          user,
+        });
+      }
+
       window.postMessage({
         source: 'focuspilot-web',
         action: 'syncToken',
-        token: response.data.access_token
+        token: access_token
       }, '*');
-      console.log('Token sync message sent to extension');
-      
-      console.log('Navigating to dashboard...'); // DEBUG
-      
-      // Navigate to dashboard
+
       navigate('/dashboard');
-      
+
     } catch (err: any) {
-      console.error('Login error:', err); // DEBUG
-      
-      // Handle different error types
-      if (err.response) {
-        // Server responded with error
-        console.error('Server error:', err.response.data);
-        setError(err.response.data.detail || 'Login failed');
-      } else if (err.request) {
-        // Request made but no response
-        console.error('No response from server');
-        setError('Cannot reach server. Check your connection.');
-      } else {
-        // Something else went wrong
-        console.error('Error:', err.message);
-        setError('An unexpected error occurred');
-      }
+      setError(err.response?.data?.detail || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -90,8 +75,9 @@ function Login() {
 
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="block text-gray-700 mb-2">Email</label>
+            <label htmlFor="email" className="block text-gray-700 mb-2">Email</label>
             <input
+              id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -103,8 +89,9 @@ function Login() {
           </div>
 
           <div className="mb-6">
-            <label className="block text-gray-700 mb-2">Password</label>
+            <label htmlFor="password" className="block text-gray-700 mb-2">Password</label>
             <input
+              id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -131,12 +118,6 @@ function Login() {
           </a>
         </p>
         
-        {/* Debug info (remove in production) */}
-        <div className="mt-4 p-4 bg-gray-100 rounded text-xs">
-          <strong>Debug Info:</strong><br/>
-          API URL: {process.env.REACT_APP_API_URL || 'Not set'}<br/>
-          Status: {loading ? 'Loading...' : 'Ready'}
-        </div>
       </div>
     </div>
   );
