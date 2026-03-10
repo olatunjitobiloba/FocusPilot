@@ -139,13 +139,14 @@ User Productivity Insights
 ## Screenshots
 
 ### Dashboard
-https://github.com/olatunjitobiloba/FocusPilot/issues/3#issue-4052996863
+![Dashboard](https://github.com/user-attachments/assets/1bf316c5-48a2-47ac-b9b1-f4f986fce572)
 
 ### Focus Session Tracking
-https://github.com/olatunjitobiloba/FocusPilot/issues/2#issue-4052992128
+![Focus Session Tracking](https://github.com/user-attachments/assets/21a65aca-11c5-479b-bb6d-288fd453fb40)
 
 ### Website Blocking
-https://github.com/olatunjitobiloba/FocusPilot/issues/1#issue-4052989412
+![Website Blocking](https://github.com/user-attachments/assets/468db9d5-e370-45c1-b7c2-82f7eb92ad78)
+
 
 ---
 
