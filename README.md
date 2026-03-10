@@ -139,13 +139,13 @@ User Productivity Insights
 ## Screenshots
 
 ### Dashboard
-![alt text](<Screenshot 2026-03-10 171228.png>)
+https://github.com/olatunjitobiloba/FocusPilot/issues/3#issue-4052996863
 
 ### Focus Session Tracking
-![alt text](image.png)
+https://github.com/olatunjitobiloba/FocusPilot/issues/2#issue-4052992128
 
 ### Website Blocking
-![alt text](image-1.png)
+https://github.com/olatunjitobiloba/FocusPilot/issues/1#issue-4052989412
 
 ---
 
