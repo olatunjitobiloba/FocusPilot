@@ -1,11 +1,31 @@
 # app/routes/stats.py
 from fastapi import APIRouter, Depends
 from app.auth import get_current_user_id
-from app.database import get_supabase
+from app.database import get_supabase, execute_with_retries
 from app.domain_whitelist import is_whitelisted_domain
 from datetime import datetime, timedelta, timezone
 
 router = APIRouter(prefix="/stats", tags=["Statistics"])
+
+
+def normalize_domain(value: str) -> str:
+    domain = (value or '').strip().lower()
+    domain = domain.replace('https://', '').replace('http://', '')
+    domain = domain.split('/')[0]
+    if domain.startswith('www.'):
+        domain = domain[4:]
+    return domain
+
+
+def get_productive_domains(supabase, user_id: str) -> set[str]:
+    result = execute_with_retries(
+        lambda db: db.table('suggestion_feedback').select('domain').eq('user_id', user_id).eq('action', 'productive').execute()
+    )
+    return {
+        normalize_domain(item.get('domain', ''))
+        for item in (result.data or [])
+        if item.get('domain')
+    }
 
 @router.get("/daily")
 def get_daily_stats(user_id: str = Depends(get_current_user_id)):
@@ -17,19 +37,45 @@ def get_daily_stats(user_id: str = Depends(get_current_user_id)):
     # Get today's date
     today = datetime.now().date()
     
-    # Query sessions for today
-    result = supabase.table('focus_sessions').select(
+    # Query completed sessions for today
+    result = execute_with_retries(lambda db: db.table('focus_sessions').select(
         'duration_minutes, focus_score, distraction_count'
     ).eq('user_id', user_id).gte(
         'start_time', f'{today}T00:00:00'
     ).lte(
         'start_time', f'{today}T23:59:59'
-    ).execute()
+    ).execute())
     sessions = result.data
+    
+    # Check for active session (no end_time)
+    active_result = execute_with_retries(lambda db: db.table('focus_sessions').select(
+        'id, start_time'
+    ).eq('user_id', user_id).is_('end_time', 'null').gte(
+        'start_time', f'{today}T00:00:00'
+    ).lte(
+        'start_time', f'{today}T23:59:59'
+    ).execute())
     
     # Calculate stats
     total_focus_minutes = sum((s.get('duration_minutes') or 0) for s in sessions)
     sessions_count = len(sessions)
+    
+    # Add active session elapsed time if exists
+    if active_result.data:
+        active_session = active_result.data[0]
+        start_time_str = active_session['start_time']
+        
+        # Parse start_time (handles both with and without timezone)
+        if start_time_str.endswith('Z') or '+' in start_time_str or start_time_str.count('-') > 2:
+            start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+        else:
+            start_time = datetime.fromisoformat(start_time_str).replace(tzinfo=timezone.utc)
+        
+        # Calculate elapsed minutes
+        now = datetime.now(timezone.utc)
+        elapsed_minutes = (now - start_time).total_seconds() / 60
+        total_focus_minutes += elapsed_minutes
+        sessions_count += 1
     total_distractions = sum((s.get('distraction_count') or 0) for s in sessions)
     avg_focus_score = (
         sum((s.get('focus_score') or 0) for s in sessions) / sessions_count 
@@ -37,24 +83,27 @@ def get_daily_stats(user_id: str = Depends(get_current_user_id)):
     )
 
     # Get top distractions (from browsing_activity table)
-    distractions_result = supabase.table('browsing_activity').select(
+    distractions_result = execute_with_retries(lambda db: db.table('browsing_activity').select(
         'domain'
     ).eq('user_id', user_id).gte(
         'timestamp', f'{today}T00:00:00'
-    ).execute()
+    ).execute())
+    productive_domains = get_productive_domains(supabase, user_id)
 
     # Count domain frequency
     from collections import Counter
     domain_counts = Counter(
-        d['domain']
+        normalize_domain(d['domain'])
         for d in distractions_result.data
-        if d.get('domain') and not is_whitelisted_domain(d['domain'])
+        if d.get('domain')
+        and not is_whitelisted_domain(d['domain'])
+        and normalize_domain(d['domain']) not in productive_domains
     )
     top_distractions = [domain for domain, _ in domain_counts.most_common(3)]
     
     return {
         "date": str(today),
-        "total_focus_minutes": total_focus_minutes,
+        "total_focus_minutes": round(total_focus_minutes),
         "sessions_count": sessions_count,
         "distraction_count": total_distractions,
         "avg_focus_score": round(avg_focus_score, 1),
@@ -74,13 +123,13 @@ def get_weekly_stats(user_id: str = Depends(get_current_user_id)):
     week_end = week_start + timedelta(days=6)  # Sunday
 
     # Query sessions for this week
-    result = supabase.table('focus_sessions').select(
+    result = execute_with_retries(lambda db: db.table('focus_sessions').select(
         'duration_minutes, start_time, focus_score'
     ).eq('user_id', user_id).gte(
         'start_time', f'{week_start}T00:00:00'
     ).lte(
         'start_time', f'{week_end}T23:59:59'
-    ).execute()
+    ).execute())
     
     sessions = result.data
     
@@ -149,7 +198,7 @@ def get_weekly_stats(user_id: str = Depends(get_current_user_id)):
 def calculate_streak(user_id: str, supabase):
     """Calculate consecutive days with at least 1 session"""
     # Get all sessions ordered by date
-    result = supabase.table('focus_sessions').select("start_time").eq('user_id', user_id).order('start_time', desc=True).execute()
+    result = execute_with_retries(lambda db: db.table('focus_sessions').select("start_time").eq('user_id', user_id).order('start_time', desc=True).execute())
     
     if not result.data:
         return 0

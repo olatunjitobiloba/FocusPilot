@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import auth, sessions, agent, stats, blocklist, analytics, recommendations, suggestions
+from app.routes import auth, sessions, agent, stats, blocklist, analytics, recommendations, suggestions, health, whitelist
 from app.database import get_supabase
 
 app = FastAPI(
@@ -33,6 +33,8 @@ app.include_router(blocklist.router)
 app.include_router(analytics.router)
 app.include_router(recommendations.router)
 app.include_router(suggestions.router)
+app.include_router(health.router)
+app.include_router(whitelist.router)
 
 @app.get("/")
 def root():
@@ -41,10 +43,6 @@ def root():
         "status": "running",
         "version": "1.0.0"
     }
-
-@app.get("/health")
-def health():
-    return {"status": "healthy"}
 
 @app.get("/test-db")
 def test_db():

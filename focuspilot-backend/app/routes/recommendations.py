@@ -1,7 +1,7 @@
 # app/routes/recommendations.py
 from fastapi import APIRouter, Depends
 from app.auth import get_current_user_id
-from app.database import get_supabase
+from app.database import get_supabase, execute_with_retries
 from app.domain_whitelist import filter_activities_by_domain
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
@@ -37,9 +37,13 @@ def get_recommendations(user_id: str = Depends(get_current_user_id)):
     # Get recent data (last 14 days)
     start_date = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
     
-    sessions_result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).gte('start_time', start_date).execute()
-    
-    activities_result = supabase.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute()
+    sessions_result = execute_with_retries(
+        lambda db: db.table('focus_sessions').select("*").eq('user_id', user_id).gte('start_time', start_date).execute()
+    )
+
+    activities_result = execute_with_retries(
+        lambda db: db.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute()
+    )
     
     sessions = sessions_result.data
     activities = filter_activities_by_domain(activities_result.data)

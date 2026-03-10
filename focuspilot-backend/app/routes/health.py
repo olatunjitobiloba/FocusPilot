@@ -6,7 +6,7 @@ Also useful for debugging deployment issues.
 """
 
 from fastapi import APIRouter
-from app.database import get_supabase
+from app.database import get_supabase, execute_with_retries
 from datetime import datetime
 import os
 
@@ -36,7 +36,9 @@ def detailed_health_check():
     try:
         supabase = get_supabase()
         # Simple query to verify connection
-        supabase.table('users').select("id").limit(1).execute()
+        execute_with_retries(
+            lambda db: db.table('users').select("id").limit(1).execute()
+        )
         checks["database"] = {
             "status":  "healthy",
             "message": "Connected to Supabase"

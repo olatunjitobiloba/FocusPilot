@@ -9,6 +9,30 @@ from typing import Optional
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
+
+def normalize_domain(value: str) -> str:
+    domain = (value or '').strip().lower()
+    domain = domain.replace('https://', '').replace('http://', '')
+    domain = domain.split('/')[0]
+    if domain.startswith('www.'):
+        domain = domain[4:]
+    return domain
+
+
+def get_productive_domains(supabase, user_id: str) -> set[str]:
+    result = (
+        supabase.table('suggestion_feedback')
+        .select('domain')
+        .eq('user_id', user_id)
+        .eq('action', 'productive')
+        .execute()
+    )
+    return {
+        normalize_domain(item.get('domain', ''))
+        for item in (result.data or [])
+        if item.get('domain')
+    }
+
 @router.get("/distractions")
 def get_distraction_analysis(
     days: int = Query(7, ge=1, le=30),
@@ -24,8 +48,12 @@ def get_distraction_analysis(
     start_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     
     result = supabase.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute()
-    
-    activities = filter_activities_by_domain(result.data)
+
+    productive_domains = get_productive_domains(supabase, user_id)
+    activities = [
+        activity for activity in filter_activities_by_domain(result.data)
+        if normalize_domain(activity.get('domain', '')) not in productive_domains
+    ]
     
     # Group by domain
     domain_stats = defaultdict(lambda: {'total_seconds': 0, 'visit_count': 0})
@@ -85,7 +113,11 @@ def get_time_breakdown(
     activities_result = supabase.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute()
     
     sessions = sessions_result.data
-    activities = filter_activities_by_domain(activities_result.data)
+    productive_domains = get_productive_domains(supabase, user_id)
+    activities = [
+        activity for activity in filter_activities_by_domain(activities_result.data)
+        if normalize_domain(activity.get('domain', '')) not in productive_domains
+    ]
     
     # Calculate focus time
     total_focus_minutes = sum(s['duration_minutes'] or 0 for s in sessions if s['end_time'])

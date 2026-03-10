@@ -11,6 +11,15 @@ router = APIRouter(prefix="/suggestions", tags=["Site Suggestions"])
 scorer = DistractionScorer()
 
 
+def normalize_domain(value: str) -> str:
+    domain = (value or '').strip().lower()
+    domain = domain.replace('https://', '').replace('http://', '')
+    domain = domain.split('/')[0]
+    if domain.startswith('www.'):
+        domain = domain[4:]
+    return domain
+
+
 # ── GET /suggestions/ ─────────────────────────────────────────────────
 @router.get("/")
 def get_site_suggestions(user_id: str = Depends(get_current_user_id)):
@@ -56,7 +65,24 @@ def get_site_suggestions(user_id: str = Depends(get_current_user_id)):
         .eq('user_id', user_id)
         .execute()
     )
-    blocked_domains = {item['domain'] for item in blocklist_result.data}
+    blocked_domains = {
+        normalize_domain(item.get('domain', ''))
+        for item in blocklist_result.data
+        if item.get('domain')
+    }
+
+    productive_result = (
+        supabase.table('suggestion_feedback')
+        .select('domain')
+        .eq('user_id', user_id)
+        .eq('action', 'productive')
+        .execute()
+    )
+    productive_domains = {
+        normalize_domain(item.get('domain', ''))
+        for item in productive_result.data
+        if item.get('domain')
+    }
 
     # Run ML scoring
     scored = scorer.score_domains(sessions, activities)
@@ -64,7 +90,10 @@ def get_site_suggestions(user_id: str = Depends(get_current_user_id)):
     # Enrich with blocked status
     suggestions = []
     for item in scored:
-        item['already_blocked'] = item['domain'] in blocked_domains
+        normalized_item_domain = normalize_domain(item.get('domain', ''))
+        if normalized_item_domain in productive_domains:
+            continue
+        item['already_blocked'] = normalized_item_domain in blocked_domains
         suggestions.append(item)
 
     # Separate new suggestions from already-blocked
@@ -93,11 +122,34 @@ def accept_suggestion(
     """
     User accepts a suggestion → add domain to blocklist.
     """
-    domain = payload.get('domain')
+    domain = normalize_domain(payload.get('domain'))
     if not domain:
         raise HTTPException(status_code=400, detail="Domain is required")
 
     supabase = get_supabase()
+
+    # If user now wants to block this domain, remove any productive classification first.
+    supabase.table('suggestion_feedback').delete()\
+        .eq('user_id', user_id)\
+        .eq('domain', domain)\
+        .eq('action', 'productive')\
+        .execute()
+
+    existing = (
+        supabase.table('blocklist')
+        .select('id')
+        .eq('user_id', user_id)
+        .eq('domain', domain)
+        .execute()
+    )
+
+    if existing.data:
+        return {
+            "message": f"{domain} is already in your blocklist",
+            "domain": domain,
+            "action": "already_blocked",
+            "already_exists": True,
+        }
 
     # Add to blocklist
     try:
@@ -121,7 +173,8 @@ def accept_suggestion(
     return {
         "message":  f"✅ {domain} added to blocklist",
         "domain":   domain,
-        "action":   "blocked"
+        "action":   "blocked",
+        "already_exists": False,
     }
 
 
