@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import auth, sessions, agent, stats, blocklist, analytics, recommendations, suggestions
+from app.routes import auth, sessions, agent, stats, blocklist, analytics, recommendations, suggestions, health
 from app.database import get_supabase
 
 app = FastAPI(
@@ -12,7 +12,13 @@ app = FastAPI(
 # Add CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://focuspilot.vercel.app",
+        "https://*.vercel.app",           # All Vercel preview deployments
+        "http://localhost:3000",           # Local development
+        "http://localhost:5173",           # Vite dev server
+        "chrome-extension://*",           # Chrome extension
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,6 +33,7 @@ app.include_router(blocklist.router)
 app.include_router(analytics.router)
 app.include_router(recommendations.router)
 app.include_router(suggestions.router)
+app.include_router(health.router)
 
 @app.get("/")
 def root():
