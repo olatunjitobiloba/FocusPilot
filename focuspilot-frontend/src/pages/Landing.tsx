@@ -67,6 +67,12 @@ export default function Landing() {
             <h3 className="text-xl font-semibold mb-2">AI Insights</h3>
             <p className="text-gray-600">Get personalized recommendations to optimize your workflow</p>
           </div>
+          <div className="bg-white p-6 rounded-lg shadow-md md:col-span-3">
+            <div className="flex items-center gap-3 mb-2">
+              <h3 className="text-xl font-semibold">Predicts Procrastination 30 Minutes Before It Happens</h3>
+            </div>
+            <p className="text-gray-600">FocusPilot's AI analyses your focus patterns in real time and warns you before distraction sets in — so you can stay on track before you even feel the urge to stray.</p>
+          </div>
         </div>
       </div>
     </div>
