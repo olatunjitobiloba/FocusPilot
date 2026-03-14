@@ -2,7 +2,7 @@
 import axios from 'axios';
 import type { UserSettings } from '../types/settings';
 
-const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+const API_URL = process.env.REACT_APP_API_URL || "https://OlatunjiTobi-focuspilot-agent.hf.space";
 
 export const api = axios.create({
   baseURL: API_URL,
