@@ -16,6 +16,7 @@ from app.ml.training_pipeline import TrainingPipeline
 from app.ml.model_manager     import model_manager
 from app.ml.dataset_builder   import DatasetBuilder
 from app.ml.preprocessor      import Preprocessor
+from typing import Dict, List
 from datetime import datetime
 import json
 import os
@@ -392,6 +393,3 @@ def _update_agent_risk_state(
     except Exception as e:
         print(f"⚠️  Agent state update error: {e}")
 
-
-# Fix missing import
-from typing import List, Dict
