@@ -97,8 +97,41 @@ function handleWindowMessage(event) {
   });
 }
 
-function handleRuntimeMessage(message) {
-  if (!message || message.action !== 'focuspilotSessionSync') return;
+function handleRuntimeMessage(message, sender, sendResponse) {
+  if (message?.action === 'focuspilotRequestTokenSync') {
+    try {
+      const token = localStorage.getItem('token');
+      const refreshToken = localStorage.getItem('refresh_token');
+      const userRaw = localStorage.getItem('user');
+
+      if (!token && !refreshToken) {
+        sendResponse?.({ success: false, reason: 'No token in page localStorage' });
+        return false;
+      }
+
+      const dataToStore = {};
+      if (token) dataToStore.token = token;
+      if (refreshToken) dataToStore.refresh_token = refreshToken;
+      if (userRaw) {
+        try {
+          dataToStore.user = JSON.parse(userRaw);
+        } catch {
+          // Ignore malformed user JSON and continue syncing tokens.
+        }
+      }
+
+      safeSetStorage(dataToStore, () => {
+        console.log('FocusPilot: Token sync requested by popup and completed');
+        sendResponse?.({ success: true });
+      });
+      return true;
+    } catch (error) {
+      sendResponse?.({ success: false, error: String(error) });
+      return false;
+    }
+  }
+
+  if (!message || message.action !== 'focuspilotSessionSync') return false;
 
   const bridgedAction =
     message.sessionAction === 'endSession' ? 'endSession' : 'startSession';
@@ -111,6 +144,8 @@ function handleRuntimeMessage(message) {
     },
     '*'
   );
+
+  return false;
 }
 
 if (!window[LISTENER_FLAG]) {

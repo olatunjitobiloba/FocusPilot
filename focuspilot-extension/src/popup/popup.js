@@ -20,14 +20,26 @@ let sessionAutoEndInProgress = false;
 let sessionStartInProgress = false;
 let sessionStateRequestCounter = 0;
 
-// Check if user is logged in
-chrome.storage.local.get(['token', 'refresh_token', 'user'], (result) => {
-  if (result.token || result.refresh_token) {
-    showDashboard(result.user);
-  } else {
-    showAuth();
-  }
-});
+async function requestTokenSyncFromActiveTab() {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const activeTab = tabs?.[0];
+      if (!activeTab?.id) {
+        resolve(false);
+        return;
+      }
+
+      chrome.tabs.sendMessage(activeTab.id, { action: 'focuspilotRequestTokenSync' }, (response) => {
+        if (chrome.runtime.lastError) {
+          resolve(false);
+          return;
+        }
+
+        resolve(Boolean(response?.success));
+      });
+    });
+  });
+}
 
 function showAuth() {
   authView.style.display = 'block';
@@ -68,6 +80,26 @@ function getStorage(keys) {
   });
 }
 
+async function initializeAuthState() {
+  const initial = await getStorage(['token', 'refresh_token', 'user', 'activeSessionId', 'sessionStartTime']);
+  if (initial.token || initial.refresh_token) {
+    await showDashboard(initial.user);
+    return;
+  }
+
+  await requestTokenSyncFromActiveTab();
+
+  const afterSync = await getStorage(['token', 'refresh_token', 'user', 'activeSessionId', 'sessionStartTime']);
+  if (afterSync.token || afterSync.refresh_token || afterSync.activeSessionId || afterSync.sessionStartTime) {
+    await showDashboard(afterSync.user);
+    return;
+  }
+
+  showAuth();
+}
+
+initializeAuthState();
+
 function setStorage(items) {
   return new Promise((resolve) => {
     chrome.storage.local.set(items, () => resolve());
@@ -87,6 +119,33 @@ function isUnauthorizedStatus(status) {
 async function handleAuthExpired() {
   if (authResetInProgress) return;
   authResetInProgress = true;
+
+  const { activeSessionId, sessionStartTime } = await getStorage(['activeSessionId', 'sessionStartTime']);
+  const hasActiveSession = Boolean(activeSessionId || sessionStartTime);
+
+  // During an already-running session, keep dashboard mode and timer state even if token sync lags.
+  if (hasActiveSession) {
+    await removeStorage([
+      'token',
+      'refresh_token',
+      'user',
+      'cachedDailyFocusMinutes',
+      'cachedStreak'
+    ]);
+    setSessionButtons(true);
+    authResetInProgress = false;
+    return;
+  }
+
+  // Attempt to recover auth from the currently active FocusPilot tab
+  // before switching the popup back to login/signup.
+  await requestTokenSyncFromActiveTab();
+  const recovered = await getStorage(['token', 'refresh_token', 'user']);
+  if (recovered.token || recovered.refresh_token) {
+    await showDashboard(recovered.user);
+    authResetInProgress = false;
+    return;
+  }
 
   await removeStorage([
     'token',
@@ -307,8 +366,20 @@ async function loadSessionState() {
       if (requestId !== sessionStateRequestCounter || sessionStartInProgress) {
         return;
       }
-      setSessionButtons(false);
-      stopPopupTimer();
+
+      const { activeSessionId, sessionStartTime, sessionDurationMins } = await getStorage([
+        'activeSessionId',
+        'sessionStartTime',
+        'sessionDurationMins'
+      ]);
+
+      if (activeSessionId && sessionStartTime) {
+        setSessionButtons(true);
+        startPopupTimer(sessionStartTime, sessionDurationMins);
+      } else {
+        setSessionButtons(false);
+        stopPopupTimer();
+      }
       return;
     }
 
@@ -316,8 +387,20 @@ async function loadSessionState() {
       if (requestId !== sessionStateRequestCounter || sessionStartInProgress) {
         return;
       }
-      setSessionButtons(false);
-      stopPopupTimer();
+
+      const { activeSessionId, sessionStartTime, sessionDurationMins } = await getStorage([
+        'activeSessionId',
+        'sessionStartTime',
+        'sessionDurationMins'
+      ]);
+
+      if (activeSessionId && sessionStartTime) {
+        setSessionButtons(true);
+        startPopupTimer(sessionStartTime, sessionDurationMins);
+      } else {
+        setSessionButtons(false);
+        stopPopupTimer();
+      }
       return;
     }
 
@@ -365,7 +448,21 @@ async function loadSessionState() {
     if (requestId !== sessionStateRequestCounter || sessionStartInProgress) {
       return;
     }
+
+    const { activeSessionId, sessionStartTime, sessionDurationMins } = await getStorage([
+      'activeSessionId',
+      'sessionStartTime',
+      'sessionDurationMins'
+    ]);
+
+    if (activeSessionId && sessionStartTime) {
+      setSessionButtons(true);
+      startPopupTimer(sessionStartTime, sessionDurationMins);
+      return;
+    }
+
     setSessionButtons(false);
+    stopPopupTimer();
   }
 }
 
@@ -474,7 +571,10 @@ async function startSession() {
     }
 
     const parsedSessionStartTime = parseSessionStartTimeToMillis(session?.start_time);
-  const { token: latestToken } = await getStorage(['token']);
+    let { token: latestToken } = await getStorage(['token']);
+    if (!latestToken) {
+      latestToken = await refreshAccessToken();
+    }
 
     // Notify dashboard immediately
     window.top?.postMessage({
@@ -501,8 +601,21 @@ async function startSession() {
       if (runtimeResponse && runtimeResponse.success) {
         return;
       } else {
-        console.error('Background startSession failed:', runtimeResponse?.error || 'Unknown error');
-        alert('Session started, but blocking could not be enabled. Please reopen the extension and try again.');
+        const runtimeError = chrome.runtime.lastError?.message;
+        const reason = runtimeResponse?.error || runtimeError || 'Unknown error';
+        const { activeSessionId: currentActiveSessionId } = await getStorage(['activeSessionId']);
+
+        if (
+          currentActiveSessionId &&
+          typeof reason === 'string' &&
+          reason.toLowerCase().includes('not authenticated')
+        ) {
+          // Session start succeeded and UI is active; ignore auth-race warning from background.
+          return;
+        }
+
+        console.error('Background startSession failed:', reason);
+        alert(`Session started, but blocking could not be enabled: ${reason}`);
       }
       }
     );
