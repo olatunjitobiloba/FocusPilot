@@ -1,5 +1,6 @@
 // src/pages/Settings.tsx
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import Navbar from '../components/Navbar';
 import { settingsAPI } from '../api/client';
 import { UserSettings, DEFAULT_SETTINGS } from '../types/settings';
@@ -63,7 +64,15 @@ function Settings() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
-      alert('Failed to save settings');
+      console.error('Error saving settings:', error);
+      let message = 'Failed to save settings';
+      if (axios.isAxiosError(error)) {
+        const detail = error.response?.data?.detail;
+        if (typeof detail === 'string' && detail.trim()) {
+          message = detail;
+        }
+      }
+      alert(message);
     } finally {
       setSaving(false);
     }
