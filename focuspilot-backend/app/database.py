@@ -24,6 +24,12 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 def _is_transient_db_error(exc: Exception) -> bool:
     message = str(exc).lower()
     transient_markers = [
+        'connecterror',
+        'httpx.connecterror',
+        'httpcore.connecterror',
+        'getaddrinfo failed',
+        'name or service not known',
+        'temporary failure in name resolution',
         'winerror 10035',
         'readerror',
         'httpcore.readerror',

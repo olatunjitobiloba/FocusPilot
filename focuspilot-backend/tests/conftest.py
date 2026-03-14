@@ -29,7 +29,7 @@ def test_user():
     """
     unique_id = str(uuid.uuid4())[:8]
     return {
-        "email":     f"test_{unique_id}@focusflow.dev",
+        "email":     f"test_{unique_id}@focuspilot.dev",
         "password":  "TestPassword123!",
         "full_name": "Test User"
     }

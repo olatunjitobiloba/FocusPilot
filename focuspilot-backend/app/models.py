@@ -15,8 +15,13 @@ class UserLogin(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
     user: dict
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 # Session models
 class SessionStart(BaseModel):

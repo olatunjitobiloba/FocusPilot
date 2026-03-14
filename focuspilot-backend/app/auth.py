@@ -8,6 +8,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 SECRET_KEY = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
+ACCESS_TOKEN_DAYS = int(os.getenv("ACCESS_TOKEN_DAYS", "7"))
+REFRESH_TOKEN_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "30"))
 
 # Change from OAuth2PasswordBearer to HTTPBearer
 security = HTTPBearer()
@@ -20,13 +22,24 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=7)
-    to_encode.update({"exp": expire})
+    expire = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_DAYS)
+    to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def verify_token(token: str):
+
+def create_refresh_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_DAYS)
+    to_encode.update({"exp": expire, "type": "refresh"})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def verify_token(token: str, expected_type: str = "access"):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        token_type = payload.get("type")
+        if token_type != expected_type:
+            return None
         return payload
     except jwt.ExpiredSignatureError:
         return None
@@ -39,7 +52,7 @@ def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(secu
     Now uses HTTPBearer for simpler Swagger UI.
     """
     token = credentials.credentials  # Extract token from credentials
-    payload = verify_token(token)
+    payload = verify_token(token, expected_type="access")
     
     if not payload:
         raise HTTPException(

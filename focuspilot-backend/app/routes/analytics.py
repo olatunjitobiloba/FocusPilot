@@ -1,13 +1,22 @@
 # app/routes/analytics.py
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from app.auth import get_current_user_id
-from app.database import get_supabase
+from app.database import execute_with_retries
 from app.domain_whitelist import filter_activities_by_domain
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from typing import Optional
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
+
+
+def run_db(operation, failure_message: str):
+    try:
+        return execute_with_retries(operation)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail=failure_message)
 
 
 def normalize_domain(value: str) -> str:
@@ -20,12 +29,13 @@ def normalize_domain(value: str) -> str:
 
 
 def get_productive_domains(supabase, user_id: str) -> set[str]:
-    result = (
-        supabase.table('suggestion_feedback')
+    result = run_db(
+        lambda client: client.table('suggestion_feedback')
         .select('domain')
         .eq('user_id', user_id)
         .eq('action', 'productive')
-        .execute()
+        .execute(),
+        "Database unavailable while loading productive domains"
     )
     return {
         normalize_domain(item.get('domain', ''))
@@ -42,14 +52,15 @@ def get_distraction_analysis(
     Analyze which sites distract user most
     Returns top distracting domains with time spent
     """
-    supabase = get_supabase()
-    
     # Get browsing activity from last N days
     start_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    
-    result = supabase.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute()
 
-    productive_domains = get_productive_domains(supabase, user_id)
+    result = run_db(
+        lambda supabase: supabase.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute(),
+        "Database unavailable while loading distraction analytics"
+    )
+
+    productive_domains = get_productive_domains(None, user_id)
     activities = [
         activity for activity in filter_activities_by_domain(result.data)
         if normalize_domain(activity.get('domain', '')) not in productive_domains
@@ -103,17 +114,21 @@ def get_time_breakdown(
     """
     Break down time by category (productive vs distracting)
     """
-    supabase = get_supabase()
-    
     # Get sessions and activities
     start_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    
-    sessions_result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).gte('start_time', start_date).execute()
-    
-    activities_result = supabase.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute()
+
+    sessions_result = run_db(
+        lambda supabase: supabase.table('focus_sessions').select("*").eq('user_id', user_id).gte('start_time', start_date).execute(),
+        "Database unavailable while loading time breakdown sessions"
+    )
+
+    activities_result = run_db(
+        lambda supabase: supabase.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute(),
+        "Database unavailable while loading time breakdown activities"
+    )
     
     sessions = sessions_result.data
-    productive_domains = get_productive_domains(supabase, user_id)
+    productive_domains = get_productive_domains(None, user_id)
     activities = [
         activity for activity in filter_activities_by_domain(activities_result.data)
         if normalize_domain(activity.get('domain', '')) not in productive_domains
@@ -149,11 +164,12 @@ def get_hourly_pattern(
     Analyze which hours user is most productive
     Returns focus time by hour of day
     """
-    supabase = get_supabase()
-    
     start_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    
-    result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).gte('start_time', start_date).execute()
+
+    result = run_db(
+        lambda supabase: supabase.table('focus_sessions').select("*").eq('user_id', user_id).gte('start_time', start_date).execute(),
+        "Database unavailable while loading hourly analytics"
+    )
     
     sessions = result.data
     

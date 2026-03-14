@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.models import SessionStart, SessionEnd, ActivityLog
 from app.auth import verify_token
-from app.database import get_supabase
+from app.database import execute_with_retries
 from app.domain_whitelist import is_whitelisted_domain, filter_activities_by_domain
 from datetime import datetime, timezone
 from collections import defaultdict
@@ -10,6 +10,15 @@ import uuid
 
 router = APIRouter(prefix="/sessions", tags=["Sessions"])
 security = HTTPBearer()
+
+
+def run_db(operation, failure_message: str):
+    try:
+        return execute_with_retries(operation)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail=failure_message)
 
 
 def parse_session_datetime(value) -> datetime:
@@ -77,10 +86,11 @@ def start_session(
     user_id: str = Depends(get_current_user_id)
 ):
     """Start a new focus session"""
-    supabase = get_supabase()
-
     # Check for active session(s)
-    active = supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute()
+    active = run_db(
+        lambda supabase: supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute(),
+        "Database unavailable while starting session"
+    )
 
     if active.data:
         newest_active, stale_sessions = get_newest_active_session(active.data)
@@ -90,23 +100,29 @@ def start_session(
             now_iso = datetime.now(timezone.utc).isoformat()
             for stale_session in stale_sessions:
                 stale_duration = get_elapsed_minutes_from_start(stale_session.get('start_time'))
-                supabase.table('focus_sessions').update({
-                    'end_time': now_iso,
-                    'duration_minutes': stale_duration,
-                    'focus_score': stale_session.get('focus_score') or 0,
-                    'distraction_count': stale_session.get('distraction_count') or 0
-                }).eq('id', stale_session['id']).execute()
+                run_db(
+                    lambda supabase: supabase.table('focus_sessions').update({
+                        'end_time': now_iso,
+                        'duration_minutes': stale_duration,
+                        'focus_score': stale_session.get('focus_score') or 0,
+                        'distraction_count': stale_session.get('distraction_count') or 0
+                    }).eq('id', stale_session['id']).execute(),
+                    "Database unavailable while cleaning duplicate active sessions"
+                )
 
         raise HTTPException(status_code=400, detail="Active session already exists")
 
     # Create session
     session_id = str(uuid.uuid4())
-    result = supabase.table('focus_sessions').insert({
-        'id': session_id,
-        'user_id': user_id,
-        'start_time': datetime.now(timezone.utc).isoformat(),
-        'distraction_count': 0
-    }).execute()
+    result = run_db(
+        lambda supabase: supabase.table('focus_sessions').insert({
+            'id': session_id,
+            'user_id': user_id,
+            'start_time': datetime.now(timezone.utc).isoformat(),
+            'distraction_count': 0
+        }).execute(),
+        "Database unavailable while starting session"
+    )
 
     return {
         "message": "Session started",
@@ -125,10 +141,11 @@ def end_session(
     user_id: str = Depends(get_current_user_id)
 ):
     """End an active focus session"""
-    supabase = get_supabase()
-
     # Get session
-    session = supabase.table('focus_sessions').select("*").eq('id', session_data.session_id).eq('user_id', user_id).single().execute()
+    session = run_db(
+        lambda supabase: supabase.table('focus_sessions').select("*").eq('id', session_data.session_id).eq('user_id', user_id).single().execute(),
+        "Database unavailable while ending session"
+    )
 
     if not session.data:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -138,12 +155,15 @@ def end_session(
     duration = max(0, int(get_elapsed_seconds_from_start(session.data.get('start_time')) / 60))
 
     # Update session
-    result = supabase.table('focus_sessions').update({
-        'end_time': end_time.isoformat(),
-        'duration_minutes': duration,
-        'focus_score': session_data.focus_score,
-        'distraction_count': session_data.distraction_count
-    }).eq('id', session_data.session_id).execute()
+    run_db(
+        lambda supabase: supabase.table('focus_sessions').update({
+            'end_time': end_time.isoformat(),
+            'duration_minutes': duration,
+            'focus_score': session_data.focus_score,
+            'distraction_count': session_data.distraction_count
+        }).eq('id', session_data.session_id).execute(),
+        "Database unavailable while ending session"
+    )
 
     return {
         "session_id": session_data.session_id,
@@ -156,9 +176,10 @@ def end_session(
 @router.get("/active")
 def get_active_session(user_id: str = Depends(get_current_user_id)):
     """Get current active session"""
-    supabase = get_supabase()
-
-    result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute()
+    result = run_db(
+        lambda supabase: supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute(),
+        "Database unavailable while loading active session"
+    )
 
     if not result.data:
         return {"active": False, "session": None}
@@ -170,12 +191,15 @@ def get_active_session(user_id: str = Depends(get_current_user_id)):
         now_iso = datetime.now(timezone.utc).isoformat()
         for stale_session in stale_sessions:
             stale_duration = get_elapsed_minutes_from_start(stale_session.get('start_time'))
-            supabase.table('focus_sessions').update({
-                'end_time': now_iso,
-                'duration_minutes': stale_duration,
-                'focus_score': stale_session.get('focus_score') or 0,
-                'distraction_count': stale_session.get('distraction_count') or 0
-            }).eq('id', stale_session['id']).execute()
+            run_db(
+                lambda supabase: supabase.table('focus_sessions').update({
+                    'end_time': now_iso,
+                    'duration_minutes': stale_duration,
+                    'focus_score': stale_session.get('focus_score') or 0,
+                    'distraction_count': stale_session.get('distraction_count') or 0
+                }).eq('id', stale_session['id']).execute(),
+                "Database unavailable while cleaning duplicate active sessions"
+            )
 
     elapsed_seconds = get_elapsed_seconds_from_start(session_data.get('start_time'))
     elapsed = max(0, int(elapsed_seconds / 60))
@@ -197,9 +221,10 @@ def get_active_session(user_id: str = Depends(get_current_user_id)):
 @router.post("/cleanup-active")
 def cleanup_active_session(user_id: str = Depends(get_current_user_id)):
     """End the user's current active session, if any."""
-    supabase = get_supabase()
-
-    active = supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').order('start_time', desc=True).execute()
+    active = run_db(
+        lambda supabase: supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').order('start_time', desc=True).execute(),
+        "Database unavailable while cleaning active session"
+    )
 
     if not active.data:
         return {"message": "No active session found", "cleaned": False}
@@ -208,12 +233,15 @@ def cleanup_active_session(user_id: str = Depends(get_current_user_id)):
     end_time = datetime.now(timezone.utc)
     duration = get_elapsed_minutes_from_start(session_data.get('start_time'))
 
-    supabase.table('focus_sessions').update({
-        'end_time': end_time.isoformat(),
-        'duration_minutes': duration,
-        'focus_score': session_data.get('focus_score') or 0,
-        'distraction_count': session_data.get('distraction_count') or 0
-    }).eq('id', session_data['id']).execute()
+    run_db(
+        lambda supabase: supabase.table('focus_sessions').update({
+            'end_time': end_time.isoformat(),
+            'duration_minutes': duration,
+            'focus_score': session_data.get('focus_score') or 0,
+            'distraction_count': session_data.get('distraction_count') or 0
+        }).eq('id', session_data['id']).execute(),
+        "Database unavailable while cleaning active session"
+    )
 
     return {
         "message": "Active session cleaned up",
@@ -229,9 +257,10 @@ def get_session_history(
     user_id: str = Depends(get_current_user_id)
 ):
     """Get user's session history"""
-    supabase = get_supabase()
-
-    result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).order('start_time', desc=True).limit(limit).execute()
+    result = run_db(
+        lambda supabase: supabase.table('focus_sessions').select("*").eq('user_id', user_id).order('start_time', desc=True).limit(limit).execute(),
+        "Database unavailable while loading session history"
+    )
 
     return {"sessions": result.data}
 
@@ -247,10 +276,11 @@ def log_activity(
     user_id: str = Depends(get_current_user_id)
 ):
     """Log browsing activity during session"""
-    supabase = get_supabase()
-
     # Verify session belongs to user
-    session_result = supabase.table('focus_sessions').select("*").eq('id', session_id).eq('user_id', user_id).limit(1).execute()
+    session_result = run_db(
+        lambda supabase: supabase.table('focus_sessions').select("*").eq('id', session_id).eq('user_id', user_id).limit(1).execute(),
+        "Database unavailable while logging activity"
+    )
 
     if not session_result.data:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -259,13 +289,16 @@ def log_activity(
         return {"message": "Activity ignored (whitelisted domain)", "ignored": True}
 
     # Log activity
-    supabase.table('browsing_activity').insert({
-        'session_id': session_id,
-        'user_id': user_id,
-        'url': activity.url,
-        'domain': activity.domain,
-        'duration_seconds': activity.duration_seconds
-    }).execute()
+    run_db(
+        lambda supabase: supabase.table('browsing_activity').insert({
+            'session_id': session_id,
+            'user_id': user_id,
+            'url': activity.url,
+            'domain': activity.domain,
+            'duration_seconds': activity.duration_seconds
+        }).execute(),
+        "Database unavailable while logging activity"
+    )
 
     return {"message": "Activity logged"}
 
@@ -276,9 +309,10 @@ def get_session_activity(
     user_id: str = Depends(get_current_user_id)
 ):
     """Get all activity logs for a session"""
-    supabase = get_supabase()
-
-    result = supabase.table('browsing_activity').select("*").eq('session_id', session_id).eq('user_id', user_id).execute()
+    result = run_db(
+        lambda supabase: supabase.table('browsing_activity').select("*").eq('session_id', session_id).eq('user_id', user_id).execute(),
+        "Database unavailable while loading session activity"
+    )
     activities = filter_activities_by_domain(result.data)
 
     return {"activities": activities}
@@ -291,20 +325,24 @@ def get_session_activity(
 @router.post("/cleanup/orphaned")
 def cleanup_orphaned_sessions(user_id: str = Depends(get_current_user_id)):
     """Clean up any orphaned (not ended) sessions for the current user"""
-    supabase = get_supabase()
-
     # Find any sessions without end_time
-    orphaned = supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute()
+    orphaned = run_db(
+        lambda supabase: supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute(),
+        "Database unavailable while cleaning orphaned sessions"
+    )
 
     if not orphaned.data:
         return {"message": "No orphaned sessions found"}
 
     # End all orphaned sessions
     for session in orphaned.data:
-        supabase.table('focus_sessions').update({
-            'end_time': datetime.now(timezone.utc).isoformat(),
-            'duration_minutes': 0
-        }).eq('id', session['id']).execute()
+        run_db(
+            lambda supabase: supabase.table('focus_sessions').update({
+                'end_time': datetime.now(timezone.utc).isoformat(),
+                'duration_minutes': 0
+            }).eq('id', session['id']).execute(),
+            "Database unavailable while cleaning orphaned sessions"
+        )
 
     return {"message": f"Cleaned up {len(orphaned.data)} orphaned session(s)"}
 
@@ -320,10 +358,11 @@ def get_detailed_history(
     user_id: str = Depends(get_current_user_id)
 ):
     """Get detailed session history with activities"""
-    supabase = get_supabase()
-
     # Get only completed sessions (with end_time and duration > 0)
-    sessions_result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).not_.is_('end_time', 'null').gt('duration_minutes', 0).order('start_time', desc=True).range(offset, offset + limit - 1).execute()
+    sessions_result = run_db(
+        lambda supabase: supabase.table('focus_sessions').select("*").eq('user_id', user_id).not_.is_('end_time', 'null').gt('duration_minutes', 0).order('start_time', desc=True).range(offset, offset + limit - 1).execute(),
+        "Database unavailable while loading detailed session history"
+    )
 
     sessions = sessions_result.data
 
@@ -334,7 +373,10 @@ def get_detailed_history(
         session_id = session['id']
 
         # Get activities for this session
-        activities_result = supabase.table('browsing_activity').select("*").eq('session_id', session_id).execute()
+        activities_result = run_db(
+            lambda supabase: supabase.table('browsing_activity').select("*").eq('session_id', session_id).execute(),
+            "Database unavailable while loading detailed session activity"
+        )
 
         activities = filter_activities_by_domain(activities_result.data)
 
@@ -377,10 +419,11 @@ def get_detailed_history(
 @router.get("/summary")
 def get_session_summary(user_id: str = Depends(get_current_user_id)):
     """Get overall session summary stats"""
-    supabase = get_supabase()
-
     # Get all completed sessions
-    result = supabase.table('focus_sessions').select("*").eq('user_id', user_id).not_.is_('end_time', 'null').execute()
+    result = run_db(
+        lambda supabase: supabase.table('focus_sessions').select("*").eq('user_id', user_id).not_.is_('end_time', 'null').execute(),
+        "Database unavailable while loading session summary"
+    )
 
     sessions = result.data
 
