@@ -1,11 +1,13 @@
 // src/App.tsx
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Landing   from './pages/Landing';
 import Signup    from './pages/Signup';
 import Login     from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Blocklist from './pages/Blocklist';
+import Settings  from './pages/Settings';
+import { applyTheme, getStoredTheme } from './utils/theme';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('token');
@@ -14,6 +16,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  useEffect(() => {
+    applyTheme(getStoredTheme());
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
@@ -22,6 +28,14 @@ function App() {
         <Route path="/login"     element={<Login />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/blocklist" element={<ProtectedRoute><Blocklist /></ProtectedRoute>} />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );

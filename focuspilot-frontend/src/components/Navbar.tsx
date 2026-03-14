@@ -7,6 +7,9 @@ function Navbar() {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
+    const refreshToken = localStorage.getItem('refresh_token');
+    const userRaw = localStorage.getItem('user');
+    const user = userRaw ? JSON.parse(userRaw) : null;
     if (!token) return;
 
     window.postMessage(
@@ -14,6 +17,8 @@ function Navbar() {
         source: 'focuspilot-web',
         action: 'syncToken',
         token,
+        refreshToken,
+        user,
       },
       '*'
     );
@@ -34,6 +39,11 @@ function Navbar() {
       ? 'text-green-600 border-b-2 border-green-600'
       : 'text-gray-600 hover:text-gray-900';
 
+  const getSettingsClass = () =>
+    location.pathname === '/settings'
+      ? 'text-green-600 border-b-2 border-green-600'
+      : 'text-gray-600 hover:text-gray-900';
+
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
   return (
@@ -41,7 +51,7 @@ function Navbar() {
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-between items-center h-16">
           <Link to="/dashboard" className="text-xl font-bold text-green-600">
-            FocusFlow
+            FocusPilot
           </Link>
 
           <div className="flex items-center gap-6">
@@ -62,6 +72,12 @@ function Navbar() {
               className={`font-medium text-sm pb-1 transition ${getSessionsClass()}`}
             >
               Sessions
+            </Link>
+            <Link
+              to="/settings"
+              className={`font-medium text-sm pb-1 transition ${getSettingsClass()}`}
+            >
+              Settings
             </Link>
           </div>
 

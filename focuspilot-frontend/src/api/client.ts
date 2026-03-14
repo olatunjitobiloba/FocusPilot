@@ -1,7 +1,8 @@
 // src/api/client.ts
 import axios from 'axios';
+import type { UserSettings } from '../types/settings';
 
-const API_URL = process.env.REACT_APP_API_URL || "https://OlatunjiTobi-focuspilot-agent.hf.space";
+const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -10,6 +11,56 @@ export const api = axios.create({
   },
   timeout: 10000,
 });
+
+let refreshPromise: Promise<string | null> | null = null;
+
+const refreshAccessToken = async (): Promise<string | null> => {
+  const refreshToken = localStorage.getItem('refresh_token');
+  if (!refreshToken) return null;
+
+  if (!refreshPromise) {
+    refreshPromise = axios
+      .post(`${API_URL}/auth/refresh`, { refresh_token: refreshToken }, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      .then((response) => {
+        const newAccessToken = response.data?.access_token;
+        const newRefreshToken = response.data?.refresh_token;
+        const user = response.data?.user;
+
+        if (!newAccessToken) return null;
+
+        localStorage.setItem('token', newAccessToken);
+        if (newRefreshToken) {
+          localStorage.setItem('refresh_token', newRefreshToken);
+        }
+        if (user) {
+          localStorage.setItem('user', JSON.stringify(user));
+        }
+
+        window.postMessage(
+          {
+            source: 'focuspilot-web',
+            action: 'syncToken',
+            token: newAccessToken,
+            refreshToken: newRefreshToken,
+            user,
+          },
+          '*'
+        );
+
+        return newAccessToken;
+      })
+      .catch(() => null)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+};
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
@@ -21,8 +72,20 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
+  async (error) => {
+    const originalRequest = error.config || {};
+    const status = error.response?.status;
+
+    if ((status === 401 || status === 403) && !originalRequest._retry && !String(originalRequest.url || '').includes('/auth/refresh')) {
+      originalRequest._retry = true;
+
+      const newAccessToken = await refreshAccessToken();
+      if (newAccessToken) {
+        originalRequest.headers = originalRequest.headers || {};
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return api(originalRequest);
+      }
+
       localStorage.clear();
 
       const currentPath = window.location.pathname;
@@ -41,6 +104,9 @@ export const authAPI = {
   
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
+
+  refresh: (refreshToken: string) =>
+    api.post('/auth/refresh', { refresh_token: refreshToken }),
   
   me: () => api.get('/auth/me'),
 };
@@ -79,4 +145,15 @@ export const whitelistAPI = {
 
   remove: (domain: string) =>
     api.delete(`/whitelist/${domain}`),
+};
+
+export const settingsAPI = {
+  get: () =>
+    api.get('/settings/'),
+
+  update: (settings: Partial<UserSettings>) =>
+    api.put('/settings/', settings),
+
+  getDataStatus: () =>
+    api.get('/ml/data-status'),
 };

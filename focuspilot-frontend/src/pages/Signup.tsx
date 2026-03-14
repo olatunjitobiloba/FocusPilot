@@ -3,6 +3,18 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../api/client';
 
+declare global {
+  interface Window {
+    chrome?: {
+      storage?: {
+        local: {
+          set: (items: Record<string, any>, callback?: () => void) => void;
+        };
+      };
+    };
+  }
+}
+
 function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,7 +31,27 @@ function Signup() {
     try {
       const response = await authAPI.signup(email, password, fullName);
       localStorage.setItem('token', response.data.access_token);
+      if (response.data.refresh_token) {
+        localStorage.setItem('refresh_token', response.data.refresh_token);
+      }
       localStorage.setItem('user', JSON.stringify(response.data.user));
+
+      const extensionChrome = window.chrome;
+      if (extensionChrome?.storage?.local) {
+        extensionChrome.storage.local.set({
+          token: response.data.access_token,
+          refresh_token: response.data.refresh_token,
+          user: response.data.user,
+        });
+      }
+
+      window.postMessage({
+        source: 'focuspilot-web',
+        action: 'syncToken',
+        token: response.data.access_token,
+        refreshToken: response.data.refresh_token,
+        user: response.data.user,
+      }, '*');
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Signup failed');

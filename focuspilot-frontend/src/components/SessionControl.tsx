@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { api } from '../api/client';
+import { api, settingsAPI } from '../api/client';
 
 interface SessionControlProps {
   onSessionEnd: () => void; // callback to refresh dashboard stats
@@ -26,6 +26,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0); // seconds
+  const [sessionDurationMins, setSessionDurationMins] = useState(25);
   const [sessionStartTimeMs, setSessionStartTimeMs] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastAction, setLastAction] = useState<'start' | 'end' | null>(null);
@@ -34,6 +35,22 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const [showOrphanOptions, setShowOrphanOptions] = useState(false);
   const [hasActiveSessionConflict, setHasActiveSessionConflict] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const autoEndingRef = useRef(false);
+
+  const loadSessionDuration = useCallback(async () => {
+    try {
+      const response = await settingsAPI.get();
+      const configuredDuration = Number(response.data?.session_duration_mins);
+      const safeDuration = Number.isFinite(configuredDuration) && configuredDuration > 0
+        ? configuredDuration
+        : 25;
+      setSessionDurationMins(safeDuration);
+      return safeDuration;
+    } catch {
+      setSessionDurationMins(25);
+      return 25;
+    }
+  }, []);
 
   const loadActiveSession = useCallback(async () => {
     const response = await api.get('/sessions/active');
@@ -80,6 +97,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   useEffect(() => {
     const checkForActiveSession = async () => {
       try {
+        await loadSessionDuration();
         await loadActiveSession();
       } catch (err) {
         setOrphanedSession(null);
@@ -89,7 +107,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     };
 
     checkForActiveSession();
-  }, [loadActiveSession]);
+  }, [loadActiveSession, loadSessionDuration]);
 
   // Listen for session events from extension (via postMessage)
   useEffect(() => {
@@ -98,7 +116,22 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       const { source, action } = event.data;
 
       if (source === 'focuspilot-extension') {
-        if (action === 'startSession' || action === 'endSession') {
+        if (action === 'endSession') {
+          // Apply end-state instantly for snappy UX, then verify with backend.
+          setIsRunning(false);
+          setSessionId(null);
+          setElapsed(0);
+          setSessionStartTimeMs(null);
+          setOrphanedSession(null);
+          setShowOrphanOptions(false);
+          setHasActiveSessionConflict(false);
+          autoEndingRef.current = false;
+          onSessionEnd();
+          setTimeout(() => loadActiveSession(), 300);
+          return;
+        }
+
+        if (action === 'startSession') {
           setTimeout(() => loadActiveSession(), 100);
         }
       }
@@ -106,12 +139,13 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
 
     window.addEventListener('message', handleExtensionMessage);
     return () => window.removeEventListener('message', handleExtensionMessage);
-  }, [loadActiveSession]);
+  }, [loadActiveSession, onSessionEnd]);
 
-  const notifyExtension = (
+  const notifyExtension = useCallback((
     action: 'startSession' | 'endSession',
     currentSessionId?: string,
-    sessionStartTime?: string
+    sessionStartTime?: string,
+    plannedDurationMins?: number
   ) => {
     const token = localStorage.getItem('token');
     console.log('Notifying extension:', action, 'Token present?', !!token, token ? `Length: ${token.length}` : 'NO TOKEN');
@@ -121,11 +155,12 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
         action,
         sessionId: currentSessionId,
         sessionStartTime,
+        sessionDurationMins: plannedDurationMins,
         token,
       },
       '*'
     );
-  };
+  }, []);
 
   // Timer tick (timestamp-based to avoid drift)
   useEffect(() => {
@@ -186,10 +221,16 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       } catch {
         // Keep local timer running even if a resync call fails.
       }
-    }, 1000);
+    }, 10000);
 
     return () => clearInterval(resync);
   }, [isRunning, sessionId, onSessionEnd]);
+
+  useEffect(() => {
+    if (!isRunning) {
+      autoEndingRef.current = false;
+    }
+  }, [isRunning]);
 
   // Detect sessions started externally (e.g., extension) while dashboard is idle
   useEffect(() => {
@@ -201,7 +242,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       } catch {
         // ignore transient errors and keep polling
       }
-    }, 1000);
+    }, 15000);
 
     return () => clearInterval(detectExternalStart);
   }, [isRunning, loadActiveSession]);
@@ -220,6 +261,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     setError('');
     try {
       const activeSession = orphanedSession ?? await getActiveSessionOrThrow();
+      const configuredDuration = await loadSessionDuration();
 
       const backendElapsedSeconds = typeof activeSession.elapsed_seconds === 'number'
         ? Math.max(0, activeSession.elapsed_seconds)
@@ -246,7 +288,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setOrphanedSession(activeSession);
       setShowOrphanOptions(false);
       setHasActiveSessionConflict(false);
-      notifyExtension('startSession', activeSession.id, activeSession.start_time);
+      notifyExtension('startSession', activeSession.id, activeSession.start_time, configuredDuration);
     } catch (err: any) {
       console.error('Error resuming session:', err);
       setError(err.response?.data?.detail || err.message || 'Failed to resume session');
@@ -321,7 +363,8 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     setHasActiveSessionConflict(false);
 
     try {
-      const res = await api.post('/sessions/start', { planned_duration: 25 });
+      const configuredDuration = await loadSessionDuration();
+      const res = await api.post('/sessions/start', { planned_duration: configuredDuration });
       const session = res.data?.session;
       if (!session?.id) {
         throw new Error('Failed to start session');
@@ -335,7 +378,8 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setOrphanedSession(null);
       setShowOrphanOptions(false);
       setHasActiveSessionConflict(false);
-      notifyExtension('startSession', session.id, session.start_time);
+      autoEndingRef.current = false;
+      notifyExtension('startSession', session.id, session.start_time, configuredDuration);
     } catch (err: any) {
       setIsRunning(previousState.isRunning);
       setSessionId(previousState.sessionId);
@@ -369,7 +413,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     }
   };
 
-  const handleEnd = async () => {
+  const handleEnd = useCallback(async () => {
     const endingSessionId = sessionId;
     if (!endingSessionId) return;
 
@@ -409,7 +453,16 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setLastAction(null);
       loadActiveSession();
     }
-  };
+  }, [elapsed, loadActiveSession, notifyExtension, onSessionEnd, sessionId, sessionStartTimeMs]);
+
+  useEffect(() => {
+    if (!isRunning || !sessionId || loading) return;
+    if (elapsed < sessionDurationMins * 60) return;
+    if (autoEndingRef.current) return;
+
+    autoEndingRef.current = true;
+    handleEnd();
+  }, [elapsed, handleEnd, isRunning, loading, sessionDurationMins, sessionId]);
 
   return (
     <div className={`rounded-2xl p-6 shadow-sm border-2 transition-all ${

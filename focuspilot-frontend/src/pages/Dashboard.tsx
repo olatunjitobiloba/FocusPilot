@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell
@@ -47,7 +47,17 @@ interface Recommendation {
   priority?: 'high' | 'medium' | 'low';
 }
 
-const COLORS = ['#16a34a', '#22c55e', '#4ade80', '#86efac'];
+const EMPTY_STATS: Stats = {
+  todayHours: 0,
+  todaySessions: 0,
+  streak: 0,
+  totalHours: 0,
+  totalSessions: 0,
+  avgScore: 0,
+  avgMinPerSession: 0,
+};
+
+const COLORS = ['#b91c1c', '#dc2626', '#ef4444', '#f87171'];
 const DASHBOARD_CACHE_KEY = 'focuspilot_dashboard_cache_v1';
 
 // ── SMALL COMPONENTS ──────────────────────────────────────────────
@@ -92,12 +102,12 @@ export default function Dashboard() {
   const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [distractionData, setDistractionData] = useState<DistractionData[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [error, setError] = useState<string>('');
   const [actionMessage, setActionMessage] = useState<string>('');
   const navigate = useNavigate();
+  const refreshInFlightRef = useRef(false);
 
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get('tab');
@@ -109,6 +119,10 @@ export default function Dashboard() {
   }, [location.search]);
 
   const loadDashboardData = useCallback(async (isInitialLoad = false) => {
+    if (!isInitialLoad && refreshInFlightRef.current) {
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -121,22 +135,26 @@ export default function Dashboard() {
       if (isInitialLoad) {
         setLoading(true);
       } else {
-        setIsRefreshing(true);
+        refreshInFlightRef.current = true;
       }
 
-      // Fetch primary dashboard data in parallel (fast path)
-      const [statsRes, weeklyRes, sessionsRes, distractionsRes, recommendationsRes] = await Promise.allSettled([
-        api.get('/stats/daily'),
-        api.get('/stats/weekly'),
-        api.get('/sessions/history'),
-        api.get('/analytics/distractions'),
-        api.get('/recommendations/')
+      // Prioritize critical endpoints so main dashboard content appears quickly.
+      const statsRequest = api.get('/stats/daily');
+      const weeklyRequest = api.get('/stats/weekly');
+      const sessionsRequest = api.get('/sessions/history');
+      const distractionsRequest = api.get('/analytics/distractions');
+      const recommendationsRequest = api.get('/recommendations/');
+
+      const [statsRes, weeklyRes, sessionsRes] = await Promise.allSettled([
+        statsRequest,
+        weeklyRequest,
+        sessionsRequest,
       ]);
 
       const extractError = (result: PromiseSettledResult<any>) =>
         result.status === 'rejected' ? result.reason : null;
 
-      const firstAuthError = [statsRes, weeklyRes, sessionsRes, distractionsRes, recommendationsRes]
+      const firstAuthError = [statsRes, weeklyRes, sessionsRes]
         .map(extractError)
         .find((err: any) => err?.response?.status === 401);
 
@@ -144,43 +162,52 @@ export default function Dashboard() {
         throw firstAuthError;
       }
 
-      // Transform stats
-      const dailyStats = statsRes.status === 'fulfilled'
-        ? statsRes.value.data
-        : { total_focus_minutes: 0, sessions_count: 0 };
-      const weekly = weeklyRes.status === 'fulfilled'
-        ? weeklyRes.value.data
-        : { current_streak: 0, daily_breakdown: {} };
-
-      setStats({
-        todayHours: dailyStats.total_focus_minutes / 60,
-        todaySessions: dailyStats.sessions_count || 0,
-        streak: weekly.current_streak || 0,
-        totalHours: 0,
-        totalSessions: 0,
-        avgScore: 0,
-        avgMinPerSession: 0,
-      });
-
-      // Process weekly data
+      // Update only from successful responses to avoid visible data flicker on transient failures.
       const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const weeklyChartData = days.map((day, idx) => {
-        const date = new Date();
-        date.setDate(date.getDate() - (date.getDay() - idx));
-        const dateStr = date.toISOString().split('T')[0];
-        const dayData = weekly.daily_breakdown?.[dateStr] || { minutes: 0 };
-        return {
-          day,
-          hours: parseFloat((dayData.minutes / 60).toFixed(1))
-        };
-      });
-      setWeeklyData(weeklyChartData);
+
+      if (statsRes.status === 'fulfilled' || weeklyRes.status === 'fulfilled') {
+        const dailyStats = statsRes.status === 'fulfilled'
+          ? statsRes.value.data
+          : null;
+        const weekly = weeklyRes.status === 'fulfilled'
+          ? weeklyRes.value.data
+          : null;
+
+        setStats((prev) => ({
+          todayHours: dailyStats ? (dailyStats.total_focus_minutes / 60) : (prev?.todayHours ?? 0),
+          todaySessions: dailyStats ? (dailyStats.sessions_count || 0) : (prev?.todaySessions ?? 0),
+          streak: weekly ? (weekly.current_streak || 0) : (prev?.streak ?? 0),
+          totalHours: prev?.totalHours ?? 0,
+          totalSessions: prev?.totalSessions ?? 0,
+          avgScore: prev?.avgScore ?? 0,
+          avgMinPerSession: prev?.avgMinPerSession ?? 0,
+        }));
+
+        if (weekly) {
+          const weeklyChartData = days.map((day, idx) => {
+            const date = new Date();
+            date.setDate(date.getDate() - (date.getDay() - idx));
+            const dateStr = date.toISOString().split('T')[0];
+            const dayData = weekly.daily_breakdown?.[dateStr] || { minutes: 0 };
+            return {
+              day,
+              hours: parseFloat((dayData.minutes / 60).toFixed(1))
+            };
+          });
+          setWeeklyData(weeklyChartData);
+        }
+      }
+
+      // Ensure dashboard cards can render even when stats endpoints are slow/unavailable.
+      if (statsRes.status !== 'fulfilled' && weeklyRes.status !== 'fulfilled') {
+        setStats((prev) => prev ?? EMPTY_STATS);
+      }
 
       // Transform sessions
-      let formattedSessions: Session[] = [];
+      let formattedSessions: Session[] | null = null;
 
       if (sessionsRes.status === 'fulfilled' && sessionsRes.value.data.sessions) {
-        formattedSessions = sessionsRes.value.data.sessions.map((s: any) => ({
+        const nextSessions: Session[] = sessionsRes.value.data.sessions.map((s: any) => ({
           id: s.id,
           date: new Date(s.start_time).toLocaleString(),
           duration: s.duration_minutes || 0,
@@ -192,59 +219,73 @@ export default function Dashboard() {
           focus_score: s.focus_score,
           distraction_count: s.distraction_count,
         }));
+        formattedSessions = nextSessions;
+        setSessions(nextSessions);
       }
 
-      const topDistractions = (distractionsRes.status === 'fulfilled' && Array.isArray(distractionsRes.value.data?.top_distractions))
-        ? distractionsRes.value.data.top_distractions
-        : [];
+      let computedDistractionData: DistractionData[] | null = null;
+      let fetchedRecommendations: Recommendation[] | null = null;
 
-      const computedDistractionData: DistractionData[] = topDistractions
-        .slice(0, 5)
-        .map((item: any) => ({
-          name: item.domain,
-          value: Number(item.total_minutes || 0),
-        }))
-        .filter((item: DistractionData) => item.value > 0);
+      Promise.allSettled([distractionsRequest, recommendationsRequest]).then(([distractionsRes, recommendationsRes]) => {
+        const authError = [distractionsRes, recommendationsRes]
+          .map((result) => (result.status === 'rejected' ? result.reason : null))
+          .find((err: any) => err?.response?.status === 401);
 
-      const fetchedRecommendations: Recommendation[] = (recommendationsRes.status === 'fulfilled' && Array.isArray(recommendationsRes.value.data?.recommendations))
-        ? recommendationsRes.value.data.recommendations.map((r: any) => ({
+        if (authError) {
+          localStorage.clear();
+          navigate('/login');
+          return;
+        }
+
+        if (distractionsRes.status === 'fulfilled' && Array.isArray(distractionsRes.value.data?.top_distractions)) {
+          const nextDistractionData: DistractionData[] = distractionsRes.value.data.top_distractions
+            .slice(0, 5)
+            .map((item: any) => ({
+              name: item.domain,
+              value: Number(item.total_minutes || 0),
+            }))
+            .filter((item: DistractionData) => item.value > 0);
+          computedDistractionData = nextDistractionData;
+          setDistractionData(nextDistractionData);
+        }
+
+        if (recommendationsRes.status === 'fulfilled' && Array.isArray(recommendationsRes.value.data?.recommendations)) {
+          const nextRecommendations: Recommendation[] = recommendationsRes.value.data.recommendations.map((r: any) => ({
             title: r.title,
             message: r.message,
             priority: r.priority,
-          }))
-        : [];
+          }));
+          fetchedRecommendations = nextRecommendations;
+          setRecommendations(nextRecommendations);
+        }
 
-      setSessions(formattedSessions);
-      setDistractionData(computedDistractionData);
-      setRecommendations(fetchedRecommendations);
+        // Refresh cache when slower sections complete.
+        try {
+          localStorage.setItem(
+            DASHBOARD_CACHE_KEY,
+            JSON.stringify({
+              stats,
+              weeklyData,
+              sessions: formattedSessions ?? sessions,
+              distractionData: computedDistractionData ?? distractionData,
+              recommendations: fetchedRecommendations ?? recommendations
+            })
+          );
+        } catch (cacheErr) {
+          console.warn('Could not cache dashboard data:', cacheErr);
+        }
+      });
 
       // Cache lightweight dashboard payload for faster subsequent loads
       try {
         localStorage.setItem(
           DASHBOARD_CACHE_KEY,
           JSON.stringify({
-            stats: {
-              todayHours: dailyStats.total_focus_minutes / 60,
-              todaySessions: dailyStats.sessions_count || 0,
-              streak: weekly.current_streak || 0,
-              totalHours: 0,
-              totalSessions: 0,
-              avgScore: 0,
-              avgMinPerSession: 0,
-            },
-            weeklyData: days.map((day, idx) => {
-              const date = new Date();
-              date.setDate(date.getDate() - (date.getDay() - idx));
-              const dateStr = date.toISOString().split('T')[0];
-              const dayData = weekly.daily_breakdown?.[dateStr] || { minutes: 0 };
-              return {
-                day,
-                hours: parseFloat((dayData.minutes / 60).toFixed(1))
-              };
-            }),
-            sessions: formattedSessions,
-            distractionData: computedDistractionData,
-            recommendations: fetchedRecommendations
+            stats,
+            weeklyData,
+            sessions: formattedSessions ?? sessions,
+            distractionData: computedDistractionData ?? distractionData,
+            recommendations: fetchedRecommendations ?? recommendations
           })
         );
       } catch (cacheErr) {
@@ -282,8 +323,9 @@ export default function Dashboard() {
       if (isInitialLoad) {
         setLoading(false);
       }
-      setIsRefreshing(false);
+      refreshInFlightRef.current = false;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   useEffect(() => {
@@ -320,13 +362,31 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Auto-refresh dashboard data every 10 seconds during active session
+  // Auto-refresh dashboard data silently when page is visible
   useEffect(() => {
-    const refreshInterval = setInterval(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
       loadDashboardData(false);
-    }, 10000); // 10 seconds
+    };
 
-    return () => clearInterval(refreshInterval);
+    const refreshInterval = setInterval(() => {
+      refreshIfVisible();
+    }, 30000); // 30 seconds
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshIfVisible();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [loadDashboardData]);
 
   const notifyExtensionBlocklistChanged = () => {
@@ -411,12 +471,6 @@ export default function Dashboard() {
               loadDashboardData(false);
             }} />
 
-            {isRefreshing && (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
-                <p className="text-sm">Refreshing dashboard data...</p>
-              </div>
-            )}
-
             {actionMessage && (
               <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg">
                 <p className="text-sm">{actionMessage}</p>
@@ -425,7 +479,7 @@ export default function Dashboard() {
 
             {!stats && !error && (
               <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
-                <p className="text-sm">Loading dashboard data...</p>
+                <p className="text-sm">Syncing dashboard data...</p>
               </div>
             )}
 

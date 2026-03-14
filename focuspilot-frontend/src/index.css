@@ -1,3 +1,70 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+	color-scheme: light;
+}
+
+html[data-theme='dark'] {
+	color-scheme: dark;
+}
+
+body {
+	transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+html[data-theme='dark'] body {
+	background-color: #0f172a;
+	color: #e5e7eb;
+}
+
+html[data-theme='dark'] .bg-white {
+	background-color: #111827 !important;
+}
+
+html[data-theme='dark'] .bg-gray-50,
+html[data-theme='dark'] .bg-gray-100 {
+	background-color: #0f172a !important;
+}
+
+html[data-theme='dark'] .bg-gray-200,
+html[data-theme='dark'] .bg-gray-300 {
+	background-color: #374151 !important;
+}
+
+html[data-theme='dark'] .text-gray-900 {
+	color: #f9fafb !important;
+}
+
+html[data-theme='dark'] .text-gray-700,
+html[data-theme='dark'] .text-gray-600 {
+	color: #d1d5db !important;
+}
+
+html[data-theme='dark'] .text-gray-500 {
+	color: #9ca3af !important;
+}
+
+html[data-theme='dark'] .border-gray-100,
+html[data-theme='dark'] .border-gray-200,
+html[data-theme='dark'] .border-gray-300 {
+	border-color: #374151 !important;
+}
+
+html[data-theme='dark'] .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+html[data-theme='dark'] .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+	border-color: #374151 !important;
+}
+
+html[data-theme='dark'] input,
+html[data-theme='dark'] select,
+html[data-theme='dark'] textarea {
+	background-color: #1f2937;
+	color: #f3f4f6;
+	border-color: #4b5563;
+}
+
+html[data-theme='dark'] ::placeholder {
+	color: #9ca3af;
+}

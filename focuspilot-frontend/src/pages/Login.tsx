@@ -3,21 +3,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../api/client';
 
-declare global {
-  interface Window {
-    chrome?: {
-      storage?: {
-        local: {
-          set: (items: Record<string, any>, callback?: () => void) => void;
-        };
-      };
-      runtime?: {
-        sendMessage: (message: any) => void;
-      };
-    };
-  }
-}
-
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,14 +19,20 @@ function Login() {
       const response = await authAPI.login(email, password);
 
       const { access_token, user } = response.data;
+      const refresh_token = response.data.refresh_token;
 
       localStorage.setItem('token', access_token);
+      if (refresh_token) {
+        localStorage.setItem('refresh_token', refresh_token);
+      }
       localStorage.setItem('user', JSON.stringify(user));
 
-      const extensionChrome = window.chrome;
-      if (extensionChrome?.storage?.local) {
-        extensionChrome.storage.local.set({
+      // Safely access chrome extension API without redeclaring window.chrome
+      const chromeExt = (window as any).chrome;
+      if (chromeExt?.storage?.local) {
+        chromeExt.storage.local.set({
           token: access_token,
+          refresh_token,
           user,
         });
       }
@@ -49,7 +40,9 @@ function Login() {
       window.postMessage({
         source: 'focuspilot-web',
         action: 'syncToken',
-        token: access_token
+        token: access_token,
+        refreshToken: refresh_token,
+        user,
       }, '*');
 
       navigate('/dashboard');
@@ -65,7 +58,7 @@ function Login() {
     <div className="min-h-screen bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center px-4">
       <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
         <h1 className="text-3xl font-bold text-center mb-6">Welcome Back</h1>
-        
+
         {/* Show error message */}
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -117,7 +110,7 @@ function Login() {
             Sign Up
           </a>
         </p>
-        
+
       </div>
     </div>
   );
