@@ -1,0 +1,104 @@
+{
+  "trained_at": "2026-03-14T21:44:53.496254",
+  "n_samples": 109,
+  "n_features": 15,
+  "n_estimators": 100,
+  "label_balance": {
+    "procrastinated": 100,
+    "focused": 9
+  },
+  "feature_names": [
+    "hour_of_day",
+    "is_night",
+    "day_of_week",
+    "is_weekend",
+    "session_duration_mins",
+    "distraction_ratio",
+    "distraction_count",
+    "abandoned_early",
+    "peak_distraction_mins",
+    "avg_focus_score_last3",
+    "days_since_last_session",
+    "sessions_today",
+    "avg_duration_last7",
+    "same_hour_avg_score",
+    "streak_days"
+  ],
+  "feature_importance": [
+    {
+      "feature": "day_of_week",
+      "importance": 0.3636,
+      "percentage": 36.36
+    },
+    {
+      "feature": "streak_days",
+      "importance": 0.3142,
+      "percentage": 31.42
+    },
+    {
+      "feature": "avg_focus_score_last3",
+      "importance": 0.0895,
+      "percentage": 8.95
+    },
+    {
+      "feature": "hour_of_day",
+      "importance": 0.0572,
+      "percentage": 5.72
+    },
+    {
+      "feature": "peak_distraction_mins",
+      "importance": 0.049,
+      "percentage": 4.9
+    },
+    {
+      "feature": "sessions_today",
+      "importance": 0.0463,
+      "percentage": 4.63
+    },
+    {
+      "feature": "is_night",
+      "importance": 0.0346,
+      "percentage": 3.46
+    },
+    {
+      "feature": "distraction_count",
+      "importance": 0.0175,
+      "percentage": 1.75
+    },
+    {
+      "feature": "days_since_last_session",
+      "importance": 0.0113,
+      "percentage": 1.13
+    },
+    {
+      "feature": "avg_duration_last7",
+      "importance": 0.0105,
+      "percentage": 1.05
+    },
+    {
+      "feature": "same_hour_avg_score",
+      "importance": 0.0055,
+      "percentage": 0.55
+    },
+    {
+      "feature": "abandoned_early",
+      "importance": 0.0008,
+      "percentage": 0.08
+    },
+    {
+      "feature": "is_weekend",
+      "importance": 0.0,
+      "percentage": 0.0
+    },
+    {
+      "feature": "session_duration_mins",
+      "importance": 0.0,
+      "percentage": 0.0
+    },
+    {
+      "feature": "distraction_ratio",
+      "importance": 0.0,
+      "percentage": 0.0
+    }
+  ]
+}
