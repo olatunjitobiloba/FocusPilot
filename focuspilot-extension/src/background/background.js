@@ -1,8 +1,34 @@
 // extension/src/background/background.js
 const API_URL = 'https://OlatunjiTobi-focuspilot-agent.hf.space';
+const DASHBOARD_URL_PATTERNS = [
+  'http://localhost:3000/*',
+  'https://focuspilot.vercel.app/*'
+];
 
 let activeSession = null;
 let blockedDomains = [];
+
+function notifyDashboardSessionEvent(action, sessionId = null) {
+  chrome.tabs.query({ url: DASHBOARD_URL_PATTERNS }, (tabs) => {
+    if (chrome.runtime.lastError || !tabs?.length) return;
+
+    tabs.forEach((tab) => {
+      if (!tab.id) return;
+      chrome.tabs.sendMessage(
+        tab.id,
+        {
+          action: 'focuspilotSessionSync',
+          sessionAction: action,
+          sessionId
+        },
+        () => {
+          // Ignore expected failures when target page is not ready.
+          void chrome.runtime.lastError;
+        }
+      );
+    });
+  });
+}
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -12,6 +38,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('Starting session with ID:', message.sessionId);
     startSession(message.sessionId, message.token, message.sessionStartTime).then(() => {
       console.log('✓ Session started successfully');
+      // Set an alarm to auto-end the session when planned duration elapses
+      const durationMins = message.sessionDurationMins || 25;
+      chrome.alarms.create('autoEndSession', { delayInMinutes: durationMins });
       sendResponse({ success: true });
     }).catch((error) => {
       console.error('✗ Error starting session:', error);
@@ -57,7 +86,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function startSession(sessionId, tokenFromMessage, sessionStartTimeFromMessage) {
   console.log('Starting session:', sessionId);
   console.log('Token from message:', tokenFromMessage ? `${tokenFromMessage.substring(0, 20)}...` : 'null');
-  activeSession = sessionId;
   
   // Use token from message (if from web page) or get from storage (if from popup)
   let token = tokenFromMessage || (await getToken());
@@ -80,6 +108,8 @@ async function startSession(sessionId, tokenFromMessage, sessionStartTimeFromMes
   }
   
   try {
+    activeSession = sessionId;
+
     // Reset session timers when starting a new session
     const now = resolvedSessionStartTime;
     await new Promise((resolve) => {
@@ -94,6 +124,7 @@ async function startSession(sessionId, tokenFromMessage, sessionStartTimeFromMes
     });
     console.log('✓ Session timers reset. Start time:', now, 'Session ID:', sessionId);
     console.log('✓ Storing activeSessionId:', sessionId);
+    notifyDashboardSessionEvent('startSession', sessionId);
     
     await refreshBlocklistRules(token);
     
@@ -110,6 +141,7 @@ async function startSession(sessionId, tokenFromMessage, sessionStartTimeFromMes
     
     console.log('Session started successfully');
   } catch (error) {
+    activeSession = null;
     console.error('Error starting session:', error);
     throw error;
   }
@@ -157,9 +189,13 @@ async function refreshBlocklistRules(tokenFromMessage) {
 // END SESSION
 async function endSession() {
   console.log('Ending session');
-  
+
+  // Clear auto-end alarm if it exists
+  chrome.alarms.clear('autoEndSession');
+
   activeSession = null;
   blockedDomains = [];
+  notifyDashboardSessionEvent('endSession');
   
   // Clear session timers from storage
   await new Promise((resolve) => {
@@ -182,6 +218,51 @@ async function endSession() {
   });
   
   console.log('Session ended successfully');
+}
+
+// ALARM: Auto-end session when planned duration elapses
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'autoEndSession') {
+    if (!activeSession) return; // Already ended
+    await autoEndSession();
+  }
+});
+
+async function autoEndSession() {
+  const sessionId = activeSession;
+  if (!sessionId) return;
+
+  const token = await getToken();
+  if (token) {
+    try {
+      await fetch(`${API_URL}/sessions/end`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          focus_score: 8,
+          distraction_count: 0
+        })
+      });
+    } catch (e) {
+      console.error('Failed to call end session API during auto-end:', e);
+    }
+  }
+
+  await endSession();
+
+  // Notify popup if it is open
+  chrome.runtime.sendMessage({ action: 'sessionAutoEnded' }).catch(() => {});
+
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('assets/icon128.png'),
+    title: 'FocusPilot Session Complete',
+    message: 'Your focus session has ended. Great work!'
+  });
 }
 
 // APPLY BLOCKING RULES
@@ -290,11 +371,17 @@ function handleTabChange(activeInfo) {
   logCurrentActivity(); // Log previous activity
   
   chrome.tabs.get(activeInfo.tabId, (tab) => {
-    if (tab.url) {
-      currentUrl = tab.url;
-      urlStartTime = Date.now();
-      console.log('Tab changed to:', currentUrl);
+    if (chrome.runtime.lastError) {
+      return;
     }
+
+    if (!tab?.url) {
+      return;
+    }
+
+    currentUrl = tab.url;
+    urlStartTime = Date.now();
+    console.log('Tab changed to:', currentUrl);
   });
 }
 
@@ -408,8 +495,19 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'addToBlocklist') {
-    const url = new URL(tab.url);
-    const domain = url.hostname;
+    if (!tab?.url) {
+      console.warn('Context menu click has no tab URL. Skipping blocklist add.');
+      return;
+    }
+
+    let domain = '';
+    try {
+      const url = new URL(tab.url);
+      domain = url.hostname;
+    } catch (error) {
+      console.warn('Invalid tab URL for blocklist add:', tab.url);
+      return;
+    }
     
     const token = await getToken();
     

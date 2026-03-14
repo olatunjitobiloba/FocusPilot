@@ -66,7 +66,15 @@ function handleWindowMessage(event) {
   // Handle token sync
   if (message.action === 'syncToken' && message.token) {
     console.log('FocusPilot: Syncing token to extension storage');
-    safeSetStorage({ token: message.token }, () => {
+    const dataToStore = { token: message.token };
+    if (message.refreshToken) {
+      dataToStore.refresh_token = message.refreshToken;
+    }
+    if (message.user) {
+      dataToStore.user = message.user;
+    }
+
+    safeSetStorage(dataToStore, () => {
       console.log('FocusPilot: Token saved to extension storage');
     });
     return;
@@ -84,11 +92,29 @@ function handleWindowMessage(event) {
     action: message.action,
     sessionId: message.sessionId,
     token: message.token,
-    sessionStartTime: message.sessionStartTime
+    sessionStartTime: message.sessionStartTime,
+    sessionDurationMins: message.sessionDurationMins
   });
+}
+
+function handleRuntimeMessage(message) {
+  if (!message || message.action !== 'focuspilotSessionSync') return;
+
+  const bridgedAction =
+    message.sessionAction === 'endSession' ? 'endSession' : 'startSession';
+
+  window.postMessage(
+    {
+      source: 'focuspilot-extension',
+      action: bridgedAction,
+      sessionId: message.sessionId || null,
+    },
+    '*'
+  );
 }
 
 if (!window[LISTENER_FLAG]) {
   window[LISTENER_FLAG] = true;
   window.addEventListener('message', handleWindowMessage);
+  chrome.runtime.onMessage.addListener(handleRuntimeMessage);
 }

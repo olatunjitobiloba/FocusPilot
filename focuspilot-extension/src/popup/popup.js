@@ -14,10 +14,15 @@ const logoutBtn = document.getElementById('logoutBtn');
 let timerInterval = null;
 let timerAnimationFrame = null;
 let timerResyncInterval = null;
+let authResetInProgress = false;
+let refreshInProgress = null;
+let sessionAutoEndInProgress = false;
+let sessionStartInProgress = false;
+let sessionStateRequestCounter = 0;
 
 // Check if user is logged in
-chrome.storage.local.get(['token', 'user'], (result) => {
-  if (result.token) {
+chrome.storage.local.get(['token', 'refresh_token', 'user'], (result) => {
+  if (result.token || result.refresh_token) {
     showDashboard(result.user);
   } else {
     showAuth();
@@ -29,12 +34,27 @@ function showAuth() {
   dashboardView.classList.remove('active');
 }
 
-function showDashboard(user) {
+async function showDashboard(user) {
   authView.style.display = 'none';
   dashboardView.classList.add('active');
   hydrateDashboardFromCache();
   loadStats();
-  loadSessionState();
+  await loadUserSettings();
+  await loadSessionState();
+}
+
+async function loadUserSettings() {
+  try {
+    const response = await fetchWithAuth(`${API_URL}/settings`);
+    if (response && response.ok) {
+      const settings = await response.json();
+      await setStorage({ userSettings: settings });
+      return settings;
+    }
+  } catch (error) {
+    console.error('Failed to load user settings:', error);
+  }
+  return null;
 }
 
 function setSessionButtons(isActive) {
@@ -60,6 +80,119 @@ function removeStorage(keys) {
   });
 }
 
+function isUnauthorizedStatus(status) {
+  return status === 401 || status === 403;
+}
+
+async function handleAuthExpired() {
+  if (authResetInProgress) return;
+  authResetInProgress = true;
+
+  await removeStorage([
+    'token',
+    'refresh_token',
+    'user',
+    'activeSessionId',
+    'sessionStartTime',
+    'blocksPrevented',
+    'cachedDailyFocusMinutes',
+    'cachedStreak'
+  ]);
+
+  setSessionButtons(false);
+  stopPopupTimer();
+  showAuth();
+  authResetInProgress = false;
+}
+
+async function refreshAccessToken() {
+  const { refresh_token } = await getStorage(['refresh_token']);
+  if (!refresh_token) return null;
+
+  if (!refreshInProgress) {
+    refreshInProgress = fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ refresh_token })
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return null;
+        }
+
+        const data = await response.json();
+        const newToken = data?.access_token;
+        const newRefreshToken = data?.refresh_token;
+        const user = data?.user;
+
+        if (!newToken) {
+          return null;
+        }
+
+        const storagePayload = { token: newToken };
+        if (newRefreshToken) storagePayload.refresh_token = newRefreshToken;
+        if (user) storagePayload.user = user;
+        await setStorage(storagePayload);
+
+        return newToken;
+      })
+      .catch(() => null)
+      .finally(() => {
+        refreshInProgress = null;
+      });
+  }
+
+  return refreshInProgress;
+}
+
+async function fetchWithAuth(url, options = {}, allowRefresh = true) {
+  const { token } = await getStorage(['token']);
+  let accessToken = token;
+
+  if (!accessToken) {
+    accessToken = await refreshAccessToken();
+  }
+
+  if (!accessToken) {
+    await handleAuthExpired();
+    return null;
+  }
+
+  const headers = {
+    ...(options.headers || {}),
+    'Authorization': `Bearer ${accessToken}`,
+  };
+
+  let response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (allowRefresh && isUnauthorizedStatus(response.status)) {
+    const refreshedToken = await refreshAccessToken();
+    if (!refreshedToken) {
+      await handleAuthExpired();
+      return response;
+    }
+
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        'Authorization': `Bearer ${refreshedToken}`,
+      },
+    });
+  }
+
+  if (isUnauthorizedStatus(response.status)) {
+    await handleAuthExpired();
+  }
+
+  return response;
+}
+
 function parseSessionStartTimeToMillis(startTime) {
   if (!startTime) return Date.now();
 
@@ -68,6 +201,12 @@ function parseSessionStartTimeToMillis(startTime) {
   const parsed = new Date(normalized).getTime();
 
   return Number.isNaN(parsed) ? Date.now() : parsed;
+}
+
+function isActiveSessionExistsError(rawValue, status) {
+  if (status === 409) return true;
+  const normalized = String(rawValue || '').toLowerCase();
+  return normalized.includes('active session already exists');
 }
 
 function formatFocusMinutes(totalMinutes) {
@@ -98,15 +237,16 @@ async function hydrateDashboardFromCache() {
     }
 
     if (activeSessionId && sessionStartTime) {
+      const { sessionDurationMins } = await getStorage(['sessionDurationMins']);
       setSessionButtons(true);
-      startPopupTimer(sessionStartTime);
+      startPopupTimer(sessionStartTime, sessionDurationMins);
     }
   } catch (error) {
     console.error('Failed to hydrate popup from cache:', error);
   }
 }
 
-function startPopupTimer(sessionStartTime) {
+function startPopupTimer(sessionStartTime, durationMins) {
   const timerSection = document.getElementById('sessionTimerSection');
   const timerDisplay = document.getElementById('sessionTimer');
 
@@ -115,11 +255,20 @@ function startPopupTimer(sessionStartTime) {
   // Clear any existing intervals/frames
   if (timerInterval) clearInterval(timerInterval);
   if (timerAnimationFrame) cancelAnimationFrame(timerAnimationFrame);
+  sessionAutoEndInProgress = false;
 
   // Update immediately
   const updateTimer = () => {
     if (!timerDisplay) return;
     const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+
+    // Auto-end session when planned duration is reached
+    if (durationMins && elapsed >= durationMins * 60 && !sessionAutoEndInProgress) {
+      sessionAutoEndInProgress = true;
+      endSession();
+      return;
+    }
+
     const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
     const seconds = (elapsed % 60).toString().padStart(2, '0');
     timerDisplay.textContent = `${minutes}:${seconds}`;
@@ -143,47 +292,79 @@ function stopPopupTimer() {
     clearInterval(timerResyncInterval);
     timerResyncInterval = null;
   }
+  sessionAutoEndInProgress = false;
   const timerSection = document.getElementById('sessionTimerSection');
   if (timerSection) timerSection.classList.remove('active');
 }
 
 async function loadSessionState() {
+  const requestId = ++sessionStateRequestCounter;
+
   try {
-    const { token } = await getStorage(['token']);
-    if (!token) {
+    const response = await fetchWithAuth(`${API_URL}/sessions/active`);
+
+    if (!response) {
+      if (requestId !== sessionStateRequestCounter || sessionStartInProgress) {
+        return;
+      }
       setSessionButtons(false);
       stopPopupTimer();
       return;
     }
 
-    const response = await fetch(`${API_URL}/sessions/active`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
     if (!response.ok) {
+      if (requestId !== sessionStateRequestCounter || sessionStartInProgress) {
+        return;
+      }
       setSessionButtons(false);
       stopPopupTimer();
       return;
     }
 
     const data = await response.json();
+    if (requestId !== sessionStateRequestCounter) {
+      return;
+    }
+
     if (data?.active && data?.session?.id) {
       const parsedSessionStartTime = parseSessionStartTimeToMillis(data.session.start_time);
+      const { sessionDurationMins } = await getStorage(['sessionDurationMins']);
       await setStorage({
         activeSessionId: data.session.id,
         sessionStartTime: parsedSessionStartTime
       });
       setSessionButtons(true);
-      startPopupTimer(parsedSessionStartTime);
+      startPopupTimer(parsedSessionStartTime, sessionDurationMins);
     } else {
+      const {
+        activeSessionId: localActiveSessionId,
+        sessionStartTime: localSessionStartTime,
+        userSettings,
+      } = await getStorage(['activeSessionId', 'sessionStartTime', 'userSettings']);
+
+      if (
+        requestId !== sessionStateRequestCounter ||
+        sessionStartInProgress ||
+        localActiveSessionId ||
+        localSessionStartTime
+      ) {
+        return;
+      }
+
       await removeStorage(['activeSessionId', 'sessionStartTime']);
       setSessionButtons(false);
       stopPopupTimer();
+
+      // Auto-start session if the setting is enabled
+      if (userSettings?.auto_start_sessions) {
+        await startSession();
+      }
     }
   } catch (error) {
     console.error('Failed to load session state:', error);
+    if (requestId !== sessionStateRequestCounter || sessionStartInProgress) {
+      return;
+    }
     setSessionButtons(false);
   }
 }
@@ -210,7 +391,7 @@ endSessionBtn.addEventListener('click', () => {
 
 // Logout
 logoutBtn.addEventListener('click', () => {
-  chrome.storage.local.remove(['token', 'user'], () => {
+  chrome.storage.local.remove(['token', 'refresh_token', 'user', 'activeSessionId', 'sessionStartTime', 'blocksPrevented'], () => {
     showAuth();
   });
 });
@@ -218,19 +399,19 @@ logoutBtn.addEventListener('click', () => {
 // Load stats
 async function loadStats() {
   try {
-    const { token } = await getStorage(['token']);
     const [dailyResponse, weeklyResponse] = await Promise.all([
-      fetch(`${API_URL}/stats/daily`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      }),
-      fetch(`${API_URL}/stats/weekly`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      fetchWithAuth(`${API_URL}/stats/daily`),
+      fetchWithAuth(`${API_URL}/stats/weekly`)
     ]);
+
+    if (!dailyResponse || !weeklyResponse) {
+      return;
+    }
+
+    if (isUnauthorizedStatus(dailyResponse.status) || isUnauthorizedStatus(weeklyResponse.status)) {
+      await handleAuthExpired();
+      return;
+    }
 
     if (dailyResponse.ok) {
       const stats = await dailyResponse.json();
@@ -251,24 +432,36 @@ async function loadStats() {
 }
 
 async function startSession() {
+  if (sessionStartInProgress) return;
+  sessionStartInProgress = true;
+  if (startSessionBtn) startSessionBtn.disabled = true;
+
   try {
-    const { token } = await getStorage(['token']);
-    if (!token) {
+    const response = await fetchWithAuth(`${API_URL}/sessions/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ planned_duration: (await getStorage(['userSettings'])).userSettings?.session_duration_mins || 25 })
+    });
+
+    if (!response) {
       alert('Please log in first.');
       return;
     }
 
-    const response = await fetch(`${API_URL}/sessions/start`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ planned_duration: 25 })
-    });
-
     if (!response.ok) {
+      if (isUnauthorizedStatus(response.status)) {
+        await handleAuthExpired();
+        alert('Session expired. Please log in again.');
+        return;
+      }
       const errorText = await response.text();
+      if (isActiveSessionExistsError(errorText, response.status)) {
+        // A session already exists (often from auto-start). Sync popup UI instead of showing a false failure.
+        await loadSessionState();
+        return;
+      }
       throw new Error(errorText || 'Failed to start session');
     }
 
@@ -281,6 +474,7 @@ async function startSession() {
     }
 
     const parsedSessionStartTime = parseSessionStartTimeToMillis(session?.start_time);
+  const { token: latestToken } = await getStorage(['token']);
 
     // Notify dashboard immediately
     window.top?.postMessage({
@@ -288,36 +482,47 @@ async function startSession() {
       action: 'startSession'
     }, '*');
 
+    const { userSettings: settingsForSession } = await getStorage(['userSettings']);
+    const durationMins = settingsForSession?.session_duration_mins || 25;
+    await setStorage({ sessionDurationMins: durationMins });
+
+    await setStorage({
+      activeSessionId: sessionId,
+      sessionStartTime: parsedSessionStartTime,
+      blocksPrevented: 0
+    });
+    setSessionButtons(true);
+    startPopupTimer(parsedSessionStartTime, durationMins);
+    loadStats();
+
     chrome.runtime.sendMessage(
-      { action: 'startSession', sessionId, token, sessionStartTime: parsedSessionStartTime },
+      { action: 'startSession', sessionId, token: latestToken, sessionStartTime: parsedSessionStartTime, sessionDurationMins: durationMins },
       async (runtimeResponse) => {
       if (runtimeResponse && runtimeResponse.success) {
-        await setStorage({
-          activeSessionId: sessionId,
-          sessionStartTime: parsedSessionStartTime,
-          blocksPrevented: 0
-        });
-        setSessionButtons(true);
-        startPopupTimer(parsedSessionStartTime);
-        loadStats();
+        return;
       } else {
-        alert(runtimeResponse?.error || 'Failed to start extension blocking');
+        console.error('Background startSession failed:', runtimeResponse?.error || 'Unknown error');
+        alert('Session started, but blocking could not be enabled. Please reopen the extension and try again.');
       }
       }
     );
   } catch (error) {
+    if (isActiveSessionExistsError(error?.message, undefined)) {
+      await loadSessionState();
+      return;
+    }
+
     console.error('Failed to start session:', error);
     alert('Could not start session. Please try again.');
+  } finally {
+    sessionStartInProgress = false;
+    if (startSessionBtn) startSessionBtn.disabled = false;
   }
 }
 
 async function endSession() {
   try {
-    const { token, activeSessionId } = await getStorage(['token', 'activeSessionId']);
-    if (!token) {
-      alert('Please log in first.');
-      return;
-    }
+    const { activeSessionId } = await getStorage(['activeSessionId']);
 
     // Optimistic UI update for instant feedback
     window.top?.postMessage({
@@ -334,11 +539,16 @@ async function endSession() {
     let sessionId = activeSessionId;
 
     if (!sessionId) {
-      const activeResponse = await fetch(`${API_URL}/sessions/active`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const activeResponse = await fetchWithAuth(`${API_URL}/sessions/active`);
+      if (!activeResponse) {
+        alert('Please log in first.');
+        return;
+      }
+      if (isUnauthorizedStatus(activeResponse.status)) {
+        await handleAuthExpired();
+        alert('Session expired. Please log in again.');
+        return;
+      }
       if (activeResponse.ok) {
         const activeData = await activeResponse.json();
         sessionId = activeData?.session?.id;
@@ -346,10 +556,9 @@ async function endSession() {
     }
 
     if (sessionId) {
-      await fetch(`${API_URL}/sessions/end`, {
+      const endResponse = await fetchWithAuth(`${API_URL}/sessions/end`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -358,6 +567,17 @@ async function endSession() {
           distraction_count: 0
         })
       });
+
+      if (!endResponse) {
+        alert('Please log in first.');
+        return;
+      }
+
+      if (isUnauthorizedStatus(endResponse.status)) {
+        await handleAuthExpired();
+        alert('Session expired. Please log in again.');
+        return;
+      }
     }
 
     loadStats();
@@ -366,3 +586,12 @@ async function endSession() {
     alert('Could not end session. Please try again.');
   }
 }
+
+// Handle auto-end notification from background alarm
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.action === 'sessionAutoEnded') {
+    stopPopupTimer();
+    setSessionButtons(false);
+    loadStats();
+  }
+});
