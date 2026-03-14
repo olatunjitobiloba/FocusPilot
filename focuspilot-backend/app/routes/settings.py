@@ -1,5 +1,5 @@
 # app/routes/settings.py
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from app.auth import get_current_user_id
 from app.database import get_supabase
 
@@ -27,7 +27,7 @@ def get_settings(user_id: str = Depends(get_current_user_id)):
         return DEFAULT_SETTINGS
 
     # Merge with defaults (in case new settings were added)
-    saved = result.data[0]['settings']
+    saved = result.data[0].get('settings') or {}
     return {**DEFAULT_SETTINGS, **saved}
 
 @router.put("/")
@@ -37,23 +37,25 @@ def update_settings(
 ):
     supabase = get_supabase()
 
-    # Get existing settings
-    result = supabase.table('user_settings').select("*").eq('user_id', user_id).execute()
+    try:
+        # Get existing settings
+        result = supabase.table('user_settings').select("*").eq('user_id', user_id).execute()
 
-    if result.data:
-        # Merge and update
-        current  = result.data[0]['settings']
-        merged   = {**current, **new_settings}
-        supabase.table('user_settings').update({
-            'settings':   merged,
-            'updated_at': 'now()'
-        }).eq('user_id', user_id).execute()
-    else:
-        # Create new settings row
-        merged = {**DEFAULT_SETTINGS, **new_settings}
-        supabase.table('user_settings').insert({
-            'user_id':  user_id,
-            'settings': merged
-        }).execute()
+        if result.data:
+            # Merge defaults + current + incoming so missing keys remain stable.
+            current = result.data[0].get('settings') or {}
+            merged  = {**DEFAULT_SETTINGS, **current, **new_settings}
+            supabase.table('user_settings').update({
+                'settings': merged
+            }).eq('user_id', user_id).execute()
+        else:
+            # Create new settings row
+            merged = {**DEFAULT_SETTINGS, **new_settings}
+            supabase.table('user_settings').insert({
+                'user_id':  user_id,
+                'settings': merged
+            }).execute()
 
-    return {"message": "Settings saved", "settings": merged}
+        return {"message": "Settings saved", "settings": merged}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Unable to save settings: {str(exc)}")
