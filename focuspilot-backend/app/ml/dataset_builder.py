@@ -45,7 +45,7 @@ class DatasetBuilder:
         - preprocessor:  Fitted preprocessor (save for inference)
         """
 
-        print(f"🔄 Building dataset for user {self.user_id[:8]}...")
+        print(f"Building dataset for user {self.user_id[:8]}...")
 
         # ── Step 1: Check data availability ───────────────────────────
         data_summary = self.extractor.get_data_summary()
@@ -53,7 +53,7 @@ class DatasetBuilder:
               f"{data_summary['total_activities']} activities")
 
         if not data_summary['has_enough_data']:
-            print("   ⚠️  Not enough data for ML (need >= 5 sessions)")
+            print("   Not enough data for ML (need >= 5 sessions)")
             return {
                 'error':        'insufficient_data',
                 'data_summary': data_summary,
@@ -101,7 +101,7 @@ class DatasetBuilder:
         # ── Step 7: Save preprocessor ─────────────────────────────────
         self.preprocessor.save(f"app/ml/scalers/{self.user_id[:8]}_scaler.json")
 
-        print("✅ Dataset built successfully!")
+        print("Dataset built successfully!")
 
         return {
             'splits':        (X_train, X_test, y_train, y_test),

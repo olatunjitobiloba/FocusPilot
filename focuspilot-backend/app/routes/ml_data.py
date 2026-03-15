@@ -40,11 +40,11 @@ def get_data_status(user_id: str = Depends(get_current_user_id)):
             'collecting'
         ),
         'message': (
-            '🟢 Model ready for high-accuracy predictions'
+            'Model ready for high-accuracy predictions'
             if summary['recommended_data'] else
-            '🟡 Model can train but more data = better accuracy'
+            'Model can train but more data = better accuracy'
             if summary['has_enough_data'] else
-            f'🔴 Need {max(0, 5 - sessions_have)} more sessions to enable ML'
+            f'Need {max(0, 5 - sessions_have)} more sessions to enable ML'
         )
     }
 
@@ -97,10 +97,10 @@ def build_dataset(
         result  = builder.build()
 
         if 'error' not in result:
-            print(f"✅ Dataset built for user {user_id[:8]}: "
+            print(f"Dataset built for user {user_id[:8]}: "
                   f"{len(result['feature_rows'])} rows")
         else:
-            print(f"⚠️  Dataset build failed: {result.get('message')}")
+            print(f"WARNING Dataset build failed: {result.get('message')}")
 
     background_tasks.add_task(_build)
 

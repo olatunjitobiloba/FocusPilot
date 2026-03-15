@@ -95,7 +95,7 @@ class ModelTrainer:
             }
         }
 
-        print("✅ Model trained!")
+        print("Model trained!")
         return self
 
     # ── Evaluation ─────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ class ModelTrainer:
         }
 
         # Print report
-        print("\n📊 Model Evaluation:")
+        print("\nModel Evaluation:")
         print(f"   Accuracy:  {accuracy:.1%}")
         print(f"   Precision: {precision:.1%}")
         print(f"   Recall:    {recall:.1%}")
@@ -299,8 +299,8 @@ class ModelTrainer:
         with open(meta_path, 'w') as f:
             json.dump(meta, f, indent=2)
 
-        print(f"✅ Model saved to {model_path}")
-        print(f"✅ Metadata saved to {meta_path}")
+        print(f"Model saved to {model_path}")
+        print(f"Metadata saved to {meta_path}")
 
         return model_path
 
@@ -325,6 +325,6 @@ class ModelTrainer:
             self.training_meta = meta
 
         self.is_trained = True
-        print(f"✅ Model loaded from {model_path}")
+        print(f"Model loaded from {model_path}")
 
         return self

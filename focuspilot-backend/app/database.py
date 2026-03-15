@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import time
+import re
+from typing import Any, Dict
 
 load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 
@@ -61,3 +63,44 @@ def execute_with_retries(operation, retries: int = 2, base_delay_seconds: float 
             time.sleep(base_delay_seconds * (attempt + 1))
 
     raise last_error
+
+
+def _extract_unknown_column_name(exc: Exception) -> str | None:
+    message = str(exc)
+    match = re.search(r"Could not find the '([^']+)' column", message)
+    if match:
+        return match.group(1)
+    return None
+
+
+def normalize_agent_state_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(payload)
+    state_value = normalized.get('state')
+
+    if isinstance(state_value, dict):
+        normalized['state'] = state_value.get('status', 'idle')
+
+        current_risk = state_value.get('current_risk')
+        if current_risk is not None and normalized.get('risk_score') is None:
+            normalized['risk_score'] = current_risk
+
+        last_assessed = state_value.get('last_assessed')
+        if last_assessed and not normalized.get('last_cycle'):
+            normalized['last_cycle'] = last_assessed
+
+    return normalized
+
+
+def upsert_agent_state(payload: Dict[str, Any]):
+    normalized_payload = normalize_agent_state_payload(payload)
+
+    while True:
+        try:
+            return execute_with_retries(
+                lambda client: client.table('agent_state').upsert(normalized_payload).execute()
+            )
+        except Exception as exc:
+            unknown_column = _extract_unknown_column_name(exc)
+            if not unknown_column or unknown_column not in normalized_payload:
+                raise
+            normalized_payload.pop(unknown_column, None)

@@ -166,7 +166,7 @@ class Preprocessor:
         with open(path, 'w') as f:
             json.dump(params, f, indent=2)
 
-        print(f"✅ Scaler saved to {path}")
+        print(f"Scaler saved to {path}")
 
     def load(self, path: str = "app/ml/scaler.json") -> 'Preprocessor':
         """Load fitted scaler parameters from disk."""

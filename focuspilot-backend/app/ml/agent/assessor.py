@@ -171,5 +171,5 @@ class Assessor:
             return prediction.get('risk_score')
 
         except Exception as e:
-            print(f"⚠️  ML assessment error: {e}")
+            print(f"WARNING ML assessment error: {e}")
             return None

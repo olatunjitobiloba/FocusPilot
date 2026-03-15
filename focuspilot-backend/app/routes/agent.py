@@ -12,6 +12,23 @@ from datetime import datetime, timedelta
 router = APIRouter(prefix="/agent", tags=["Agent"])
 
 
+def _get_persisted_cycle_count(supabase, user_id: str) -> int:
+    result = (
+        supabase.table('agent_events')
+        .select('id')
+        .eq('user_id', user_id)
+        .eq('event_type', 'monitoring_cycle')
+        .execute()
+    )
+    return len(result.data or [])
+
+
+def _normalize_persisted_state(raw_state):
+    if isinstance(raw_state, str) and raw_state:
+        return raw_state
+    return 'idle'
+
+
 @router.get("/status")
 def get_agent_status(user_id: str = Depends(get_current_user_id)):
     """Get current agent status for the user."""
@@ -29,11 +46,15 @@ def get_agent_status(user_id: str = Depends(get_current_user_id)):
 
         if result.data:
             db_state = result.data[0]
+            cycle_count = db_state.get('cycle_count')
+            if cycle_count is None:
+                cycle_count = _get_persisted_cycle_count(supabase, user_id)
+
             return {
-                'state': db_state.get('state', 'idle'),
+                'state': _normalize_persisted_state(db_state.get('state')),
                 'risk_score': db_state.get('risk_score', 0),
                 'last_cycle': db_state.get('last_cycle'),
-                'cycle_count': db_state.get('cycle_count', 0),
+                'cycle_count': cycle_count,
                 'agent_active': False,
                 'orchestrator_running': orchestrator.is_running,
             }

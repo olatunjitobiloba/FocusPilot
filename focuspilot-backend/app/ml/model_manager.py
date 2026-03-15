@@ -57,10 +57,10 @@ class ModelManager:
             trainer = ModelTrainer()
             trainer.load(model_dir=f"app/ml/models/{user_key}")
             self._models[user_key] = trainer
-            print(f"✅ Model loaded for user {user_key}")
+            print(f"Model loaded for user {user_key}")
             return trainer
         except Exception as e:
-            print(f"⚠️  Failed to load model for {user_key}: {e}")
+            print(f"WARNING Failed to load model for {user_key}: {e}")
             return None
 
     def load_scaler(self, user_id: str) -> Optional[Preprocessor]:
@@ -80,7 +80,7 @@ class ModelManager:
             self._scalers[user_key] = preprocessor
             return preprocessor
         except Exception as e:
-            print(f"⚠️  Failed to load scaler for {user_key}: {e}")
+            print(f"WARNING Failed to load scaler for {user_key}: {e}")
             return None
 
     def invalidate(self, user_id: str):
@@ -91,7 +91,7 @@ class ModelManager:
         user_key = user_id[:8]
         self._models.pop(user_key, None)
         self._scalers.pop(user_key, None)
-        print(f"🔄 Cache invalidated for user {user_key}")
+        print(f"Cache invalidated for user {user_key}")
 
     def has_model(self, user_id: str) -> bool:
         """Check if a trained model exists for this user."""

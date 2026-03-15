@@ -31,7 +31,7 @@ class TrainingPipeline:
             Dict with metrics, feature importance, model path
         """
         print(f"\n{'='*50}")
-        print(f"🚀 Training pipeline for user {self.user_id[:8]}")
+        print(f"Training pipeline for user {self.user_id[:8]}")
         print(f"{'='*50}\n")
 
         # ── Step 1: Build dataset ───���──────────────────────────────────
@@ -78,7 +78,7 @@ class TrainingPipeline:
         feature_importance = trainer.get_feature_importance()
 
         print(f"\n{'='*50}")
-        print(f"✅ Training complete!")
+        print(f"Training complete!")
         print(f"   Accuracy: {metrics['accuracy']:.1%}")
         print(f"{'='*50}\n")
 

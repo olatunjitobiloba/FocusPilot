@@ -76,8 +76,8 @@ class StateMachine:
         """
         if not self.can_transition(new_state):
             print(
-                f"⚠️  Invalid transition: "
-                f"{self.current_state} → {new_state}"
+                f"WARNING Invalid transition: "
+                f"{self.current_state} -> {new_state}"
             )
             return False
 
@@ -90,7 +90,7 @@ class StateMachine:
             'reason': reason
         })
 
-        print(f"🔄 Agent: {old_state} → {new_state} ({reason})")
+        print(f"[Agent] {old_state} -> {new_state} ({reason})")
         return True
 
     def get_state_description(self) -> str:

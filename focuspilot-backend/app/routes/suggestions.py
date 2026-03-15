@@ -171,7 +171,7 @@ def accept_suggestion(
     }).execute()
 
     return {
-        "message":  f"✅ {domain} added to blocklist",
+        "message":  f"{domain} added to blocklist",
         "domain":   domain,
         "action":   "blocked",
         "already_exists": False,

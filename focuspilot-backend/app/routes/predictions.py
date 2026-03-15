@@ -11,7 +11,7 @@ Endpoints:
 
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from app.auth import get_current_user_id
-from app.database import get_supabase
+from app.database import get_supabase, upsert_agent_state
 from app.ml.training_pipeline import TrainingPipeline
 from app.ml.model_manager     import model_manager
 from app.ml.dataset_builder   import DatasetBuilder
@@ -45,18 +45,18 @@ def train_model(
 
         # Save training result to Supabase
         supabase = get_supabase()
-        supabase.table('agent_state').upsert({
+        upsert_agent_state({
             'user_id':       user_id,
             'last_trained':  datetime.utcnow().isoformat(),
             'model_metrics': result.get('metrics', {}),
             'training_result': result
-        }).execute()
+        })
 
         if result['success']:
-            print(f"✅ Training complete for {user_id[:8]}: "
+            print(f"Training complete for {user_id[:8]}: "
                   f"accuracy={result['metrics']['accuracy']:.1%}")
         else:
-            print(f"⚠️  Training failed for {user_id[:8]}: "
+            print(f"WARNING Training failed for {user_id[:8]}: "
                   f"{result.get('message')}")
 
     background_tasks.add_task(_train)
@@ -190,7 +190,7 @@ def get_current_risk(user_id: str = Depends(get_current_user_id)):
     try:
         X = builder.build_inference_row(current_session)
     except Exception as e:
-        print(f"⚠️  Feature build error: {e}")
+        print(f"WARNING Feature build error: {e}")
         return {
             'risk_score':      0.3,
             'risk_percentage': 30,
@@ -361,7 +361,7 @@ def _get_top_risk_factors(
             })
 
     except Exception as e:
-        print(f"⚠️  Risk factor error: {e}")
+        print(f"WARNING Risk factor error: {e}")
 
     return factors[:3]  # Top 3 factors
 
@@ -374,14 +374,11 @@ def _update_agent_risk_state(
     """Save current risk score to agent state and history."""
     try:
         # Update agent state
-        supabase.table('agent_state').upsert({
+        upsert_agent_state({
             'user_id':    user_id,
             'risk_score': risk_score,
-            'state': {
-                'current_risk':  risk_score,
-                'last_assessed': datetime.utcnow().isoformat()
-            }
-        }).execute()
+            'last_cycle': datetime.utcnow().isoformat()
+        })
 
         # Log to risk history
         supabase.table('risk_history').insert({
@@ -391,5 +388,5 @@ def _update_agent_risk_state(
         }).execute()
 
     except Exception as e:
-        print(f"⚠️  Agent state update error: {e}")
+        print(f"WARNING Agent state update error: {e}")
 

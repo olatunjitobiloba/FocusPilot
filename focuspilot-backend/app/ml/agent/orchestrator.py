@@ -40,7 +40,7 @@ class AgentOrchestrator:
     def start(self):
         """Start the orchestrator background thread."""
         if self._running:
-            print("⚠️  Orchestrator already running")
+            print("WARNING Orchestrator already running")
             return
 
         self._running = True
@@ -50,25 +50,25 @@ class AgentOrchestrator:
             name="AgentOrchestrator"
         )
         self._thread.start()
-        print("🚀 Agent Orchestrator started")
+        print("Agent Orchestrator started")
 
     def stop(self):
         """Stop the orchestrator."""
         self._running = False
-        print("🛑 Agent Orchestrator stopped")
+        print("Agent Orchestrator stopped")
 
     def _run_loop(self):
         """
         Main orchestrator loop.
         Runs every 60 seconds.
         """
-        print("🔄 Orchestrator loop running...")
+        print("Orchestrator loop running...")
 
         while self._running:
             try:
                 self._run_all_agents()
             except Exception as e:
-                print(f"⚠️  Orchestrator error: {e}")
+                print(f"WARNING Orchestrator error: {e}")
 
             time.sleep(self._cycle_interval)
 
@@ -94,7 +94,7 @@ class AgentOrchestrator:
         if not active_user_ids:
             return
 
-        print(f"🔄 Running agents for {len(active_user_ids)} active users")
+        print(f"Running agents for {len(active_user_ids)} active users")
 
         for user_id in active_user_ids:
             try:
@@ -108,7 +108,7 @@ class AgentOrchestrator:
                 agent.run_cycle()
 
             except Exception as e:
-                print(f"⚠️  Agent error for {user_id[:8]}: {e}")
+                print(f"WARNING Agent error for {user_id[:8]}: {e}")
 
     # ── Agent management ───────────────────────────────────────────────
 
@@ -116,7 +116,7 @@ class AgentOrchestrator:
         """Get existing agent or create new one for user."""
         if user_id not in self._agents:
             self._agents[user_id] = MonitoringAgent(user_id)
-            print(f"✅ Created agent for user {user_id[:8]}")
+            print(f"Created agent for user {user_id[:8]}")
         return self._agents[user_id]
 
     def get_agent(self, user_id: str) -> Optional[MonitoringAgent]:

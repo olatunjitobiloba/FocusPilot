@@ -21,7 +21,7 @@ import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from app.database              import get_supabase
+from app.database              import get_supabase, upsert_agent_state
 from app.ml.agent.observer     import Observer
 from app.ml.agent.assessor     import Assessor
 from app.ml.agent.states       import AgentState, StateMachine
@@ -63,7 +63,7 @@ class MonitoringAgent:
         self.cycle_count += 1
         cycle_start = datetime.utcnow()
 
-        print(f"\n🔄 Cycle {self.cycle_count} | "
+        print(f"\nCycle {self.cycle_count} | "
               f"User {self.user_id[:8]} | "
               f"State: {self.state_machine.current_state}")
 
@@ -191,13 +191,13 @@ class MonitoringAgent:
         """Save cycle data to database."""
         try:
             # Update agent state in DB
-            self.supabase.table('agent_state').upsert({
+            upsert_agent_state({
                 'user_id':    self.user_id,
                 'state':      self.state_machine.current_state.value,
                 'risk_score': assessment['risk_score'],
                 'last_cycle': datetime.utcnow().isoformat(),
                 'cycle_count': self.cycle_count
-            }).execute()
+            })
 
             # Log event
             self.supabase.table('agent_events').insert({
@@ -225,7 +225,7 @@ class MonitoringAgent:
             }).execute()
 
         except Exception as e:
-            print(f"⚠️  Persist error: {e}")
+            print(f"WARNING Persist error: {e}")
 
     # ── Control ────────────────────────────────────────────────────────
 

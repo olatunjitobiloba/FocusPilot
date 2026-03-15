@@ -37,7 +37,7 @@ class AlertSystem:
 
         alert = {
             'type':       'warning',
-            'title':      '⚠️ Focus Risk Detected',
+            'title':      'Focus Risk Detected',
             'message':    message,
             'risk_score': risk_score,
             'signals':    signals,
@@ -47,7 +47,7 @@ class AlertSystem:
         self._log_alert(alert)
         self._push_to_notification_queue(alert)
 
-        print(f"   ⚠️  Warning sent: {message[:60]}...")
+        print(f"   Warning sent: {message[:60]}...")
         return alert
 
     def send_intervention(
@@ -65,7 +65,7 @@ class AlertSystem:
 
         alert = {
             'type':              'intervention',
-            'title':             '🚨 Procrastination Detected',
+            'title':             'Procrastination Detected',
             'message':           message,
             'risk_score':        risk_score,
             'signals':           signals,
@@ -77,7 +77,7 @@ class AlertSystem:
         self._log_intervention(alert)
         self._push_to_notification_queue(alert)
 
-        print(f"   🚨 Intervention: {intervention_type} | "
+        print(f"   Intervention: {intervention_type} | "
               f"Risk={risk_score:.2f}")
         return alert
 
@@ -86,10 +86,10 @@ class AlertSystem:
         Send positive reinforcement when user recovers focus.
         """
         messages = [
-            "Great job refocusing! Keep it up! 💪",
-            "You got back on track. That's what matters! ✅",
-            "Focus restored. You're doing great! 🎯",
-            "Nice recovery! Stay in the zone! 🔥"
+            "Great job refocusing! Keep it up!",
+            "You got back on track. That's what matters!",
+            "Focus restored. You're doing great!",
+            "Nice recovery! Stay in the zone!"
         ]
 
         import random
@@ -97,7 +97,7 @@ class AlertSystem:
 
         alert = {
             'type':       'recovery',
-            'title':      '✅ Focus Restored',
+            'title':      'Focus Restored',
             'message':    message,
             'risk_score': risk_score,
             'sent_at':    datetime.utcnow().isoformat()
@@ -106,7 +106,7 @@ class AlertSystem:
         self._log_alert(alert)
         self._push_to_notification_queue(alert)
 
-        print(f"   ✅ Recovery sent")
+        print(f"   Recovery sent")
         return alert
 
     # ── Message builders ───────────────────────────────────────────────
@@ -189,7 +189,7 @@ class AlertSystem:
                 'event_data': alert
             }).execute()
         except Exception as e:
-            print(f"⚠️  Alert log error: {e}")
+            print(f"WARNING Alert log error: {e}")
 
     def _log_intervention(self, alert: Dict):
         """Log intervention to agent_interventions table."""
@@ -201,7 +201,7 @@ class AlertSystem:
                 'risk_score_at_trigger': alert.get('risk_score')
             }).execute()
         except Exception as e:
-            print(f"⚠️  Intervention log error: {e}")
+            print(f"WARNING Intervention log error: {e}")
 
     def _push_to_notification_queue(self, alert: Dict):
         """
@@ -218,4 +218,4 @@ class AlertSystem:
                 'created_at': datetime.utcnow().isoformat()
             }).execute()
         except Exception as e:
-            print(f"⚠️  Notification queue error: {e}")
+            print(f"WARNING Notification queue error: {e}")

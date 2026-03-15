@@ -233,9 +233,9 @@ def seed_sessions_and_activities():
                 if current_time >= end_time:
                     break
 
-    print(f"✅ Created {sessions_created} sessions")
-    print(f"✅ Created {activities_created} browsing activities")
-    print(f"🎉 Seed complete! Visit /suggestions/ to see ML recommendations")
+    print(f"Created {sessions_created} sessions")
+    print(f"Created {activities_created} browsing activities")
+    print(f"Seed complete! Visit /suggestions/ to see ML recommendations")
 
 
 if __name__ == "__main__":
