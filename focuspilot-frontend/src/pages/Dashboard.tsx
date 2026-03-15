@@ -7,6 +7,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { api, whitelistAPI } from '../api/client';
 import SessionControl from '../components/SessionControl';
 import Navbar from '../components/Navbar';
+import RiskMeter from '../components/RiskMeter';
+import FeatureImportanceChart from '../components/FeatureImportanceChart';
 
 interface Stats {
   todayHours: number;
@@ -527,6 +529,22 @@ export default function Dashboard() {
                 value={`${(stats?.avgScore ?? 0).toFixed(1)}/10`}
                 sub={`${(stats?.avgMinPerSession ?? 0).toFixed(1)} min/session`}
               />
+            </div>
+
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                 AI Risk Assessment
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <RiskMeter autoRefresh={true} />
+
+                <div className="bg-white rounded-xl shadow p-6">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">
+                     What Drives Your Procrastination
+                  </h3>
+                  <FeatureImportanceChart />
+                </div>
+              </div>
             </div>
 
             {/* Charts Row */}

@@ -1,0 +1,180 @@
+// src/components/RiskMeter.tsx
+import React, { useEffect, useState } from 'react';
+import { predictionsAPI } from '../api/client';
+import { RiskPrediction } from '../types/predictions';
+
+interface RiskMeterProps {
+  compact?: boolean;       // For extension popup (smaller)
+  autoRefresh?: boolean;   // Poll every 60 seconds
+}
+
+function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
+  const [risk, setRisk]       = useState<RiskPrediction | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadRisk();
+
+    if (autoRefresh) {
+      const interval = setInterval(loadRisk, 60_000); // Every 60s
+      return () => clearInterval(interval);
+    }
+  }, [autoRefresh]);
+
+  const loadRisk = async () => {
+    try {
+      const response = await predictionsAPI.getRisk();
+      setRisk(response.data);
+    } catch (error) {
+      console.error('Error loading risk:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="animate-pulse bg-gray-200 rounded-lg h-24" />
+    );
+  }
+
+  if (!risk) return null;
+
+  // ── Color scheme by risk level ─────────────────────────────────────
+  const colors = {
+    low:      { bg: 'bg-green-50',  border: 'border-green-200', text: 'text-green-700',  bar: 'bg-green-500',  icon: '🟢' },
+    medium:   { bg: 'bg-yellow-50', border: 'border-yellow-200',text: 'text-yellow-700', bar: 'bg-yellow-500', icon: '🟡' },
+    high:     { bg: 'bg-orange-50', border: 'border-orange-200',text: 'text-orange-700', bar: 'bg-orange-500', icon: '🟠' },
+    critical: { bg: 'bg-red-50',    border: 'border-red-200',   text: 'text-red-700',    bar: 'bg-red-500',    icon: '🔴' }
+  };
+
+  const c = colors[risk.risk_level] || colors.low;
+
+  // ── Compact version (for extension popup) ─────────────────────────
+  if (compact) {
+    return (
+      <div className={`${c.bg} border ${c.border} rounded-lg p-3`}>
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm font-semibold text-gray-700">
+            {c.icon} Procrastination Risk
+          </span>
+          <span className={`text-lg font-bold ${c.text}`}>
+            {risk.risk_percentage}%
+          </span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div
+            className={`${c.bar} h-2 rounded-full transition-all duration-500`}
+            style={{ width: `${risk.risk_percentage}%` }}
+          />
+        </div>
+        <p className={`text-xs ${c.text} mt-1 capitalize`}>
+          {risk.risk_level} risk
+          {!risk.model_available && ' (collecting data)'}
+        </p>
+      </div>
+    );
+  }
+
+  // ── Full version (for dashboard) ──────────────────────────────────
+  return (
+    <div className={`${c.bg} border ${c.border} rounded-xl p-6`}>
+
+      {/* Header */}
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h3 className="text-lg font-bold text-gray-900">
+            {c.icon} Procrastination Risk
+          </h3>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {risk.model_available
+              ? `Updated ${new Date(risk.assessed_at).toLocaleTimeString()}`
+              : 'Collecting data for AI model'
+            }
+          </p>
+        </div>
+
+        {/* Big risk percentage */}
+        <div className="text-right">
+          <p className={`text-4xl font-bold ${c.text}`}>
+            {risk.risk_percentage}%
+          </p>
+          <p className={`text-sm font-medium ${c.text} capitalize`}>
+            {risk.risk_level} risk
+          </p>
+        </div>
+      </div>
+
+      {/* Risk bar */}
+      <div className="mb-4">
+        <div className="w-full bg-gray-200 rounded-full h-4">
+          <div
+            className={`${c.bar} h-4 rounded-full transition-all duration-700`}
+            style={{ width: `${risk.risk_percentage}%` }}
+          />
+        </div>
+        {/* Scale labels */}
+        <div className="flex justify-between text-xs text-gray-400 mt-1">
+          <span>Low</span>
+          <span>Medium</span>
+          <span>High</span>
+          <span>Critical</span>
+        </div>
+      </div>
+
+      {/* Risk factors */}
+      {risk.top_risk_factors && risk.top_risk_factors.length > 0 && (
+        <div>
+          <p className="text-sm font-semibold text-gray-700 mb-2">
+            ⚠️ Risk Factors:
+          </p>
+          <div className="space-y-2">
+            {risk.top_risk_factors.map((factor, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-2 text-sm"
+              >
+                <span className="mt-0.5">
+                  {factor.severity === 'high'   ? '🔴' :
+                   factor.severity === 'medium' ? '🟡' : '🟢'}
+                </span>
+                <div>
+                  <span className="font-medium text-gray-800">
+                    {factor.factor}:
+                  </span>{' '}
+                  <span className="text-gray-600">{factor.value}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* No model message */}
+      {!risk.model_available && (
+        <div className="mt-3 p-3 bg-white bg-opacity-60 rounded-lg">
+          <p className="text-sm text-gray-600">
+            🤖 Complete more focus sessions to enable AI predictions.
+            The model trains automatically after 5 sessions.
+          </p>
+        </div>
+      )}
+
+      {/* Confidence badge */}
+      {risk.model_available && (
+        <div className="mt-3 flex items-center gap-2">
+          <span className="text-xs text-gray-500">Model confidence:</span>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+            risk.confidence === 'high'   ? 'bg-green-100 text-green-700'  :
+            risk.confidence === 'medium' ? 'bg-yellow-100 text-yellow-700':
+                                           'bg-gray-100 text-gray-600'
+          }`}>
+            {risk.confidence}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default RiskMeter;

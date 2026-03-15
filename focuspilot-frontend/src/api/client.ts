@@ -157,3 +157,20 @@ export const settingsAPI = {
   getDataStatus: () =>
     api.get('/ml/data-status'),
 };
+
+export const predictionsAPI = {
+  getRisk: () =>
+    api.get('/predictions/risk'),
+
+  getModelStatus: () =>
+    api.get('/predictions/model-status'),
+
+  trainModel: () =>
+    api.post('/predictions/train'),
+
+  getFeatureImportance: () =>
+    api.get('/predictions/feature-importance'),
+
+  getRiskHistory: () =>
+    api.get('/predictions/risk/history'),
+};
