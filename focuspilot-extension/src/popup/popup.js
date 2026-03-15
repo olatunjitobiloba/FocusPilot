@@ -53,6 +53,7 @@ async function showDashboard(user) {
   loadStats();
   await loadUserSettings();
   await loadSessionState();
+  await loadRiskScore();
 }
 
 async function loadUserSettings() {
@@ -98,7 +99,19 @@ async function initializeAuthState() {
   showAuth();
 }
 
-initializeAuthState();
+async function checkAuthState() {
+  await initializeAuthState();
+}
+
+async function loadActiveSession() {
+  await loadSessionState();
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await checkAuthState();
+  await loadActiveSession();
+  await loadRiskScore();
+});
 
 function setStorage(items) {
   return new Promise((resolve) => {
@@ -525,7 +538,104 @@ async function loadStats() {
     }
   } catch (error) {
     console.error('Failed to load stats:', error);
+  } finally {
+    await loadRiskScore();
   }
+}
+
+async function loadRiskScore() {
+  try {
+    const response = await fetchWithAuth(`${API_URL}/predictions/risk`);
+    if (!response || !response.ok) return;
+
+    const risk = await response.json();
+    displayRiskScore(risk);
+  } catch (error) {
+    console.error('Risk load error:', error);
+  }
+}
+
+function displayRiskScore(risk) {
+  const container = document.getElementById('risk-container');
+  if (!container) return;
+
+  const colors = {
+    low: '#22c55e',
+    medium: '#eab308',
+    high: '#f97316',
+    critical: '#ef4444'
+  };
+
+  const icons = {
+    low: '🟢',
+    medium: '🟡',
+    high: '🟠',
+    critical: '🔴'
+  };
+
+  const level = String(risk?.risk_level || 'low').toLowerCase();
+  const color = colors[level] || colors.low;
+  const icon = icons[level] || icons.low;
+  const numericRisk = Number(risk?.risk_percentage);
+  const percentage = Number.isFinite(numericRisk)
+    ? Math.max(0, Math.min(100, Math.round(numericRisk)))
+    : 0;
+  const topFactors = Array.isArray(risk?.top_risk_factors) ? risk.top_risk_factors : [];
+
+  container.innerHTML = `
+    <div style="
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 12px;
+    ">
+      <div style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      ">
+        <span style="font-size: 13px; font-weight: 600; color: #374151;">
+          ${icon} Procrastination Risk
+        </span>
+        <span style="font-size: 18px; font-weight: 700; color: ${color};">
+          ${percentage}%
+        </span>
+      </div>
+
+      <div style="
+        width: 100%;
+        background: #e5e7eb;
+        border-radius: 9999px;
+        height: 8px;
+        margin-bottom: 6px;
+      ">
+        <div style="
+          width: ${percentage}%;
+          background: ${color};
+          height: 8px;
+          border-radius: 9999px;
+          transition: width 0.5s ease;
+        "></div>
+      </div>
+
+      <p style="font-size: 11px; color: ${color}; text-transform: capitalize;">
+        ${level} risk
+        ${risk?.model_available === false ? '(collecting data)' : ''}
+      </p>
+
+      ${topFactors.length > 0 ? `
+        <div style="margin-top: 8px; border-top: 1px solid #e5e7eb; padding-top: 8px;">
+          ${topFactors.slice(0, 2).map((f) => `
+            <p style="font-size: 11px; color: #6b7280; margin-bottom: 3px;">
+              ⚠️ ${f.factor}
+            </p>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
 }
 
 async function startSession() {
