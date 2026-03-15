@@ -5,6 +5,7 @@ import Landing   from './pages/Landing';
 import Signup    from './pages/Signup';
 import Login     from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import AgentStatus from './pages/AgentStatus';
 import Blocklist from './pages/Blocklist';
 import Settings  from './pages/Settings';
 import { applyTheme, getStoredTheme } from './utils/theme';
@@ -27,6 +28,14 @@ function App() {
         <Route path="/signup"    element={<Signup />} />
         <Route path="/login"     element={<Login />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route
+          path="/agent"
+          element={
+            <ProtectedRoute>
+              <AgentStatus />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/blocklist" element={<ProtectedRoute><Blocklist /></ProtectedRoute>} />
         <Route
           path="/settings"

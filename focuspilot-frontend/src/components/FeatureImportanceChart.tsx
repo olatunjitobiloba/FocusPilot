@@ -41,7 +41,7 @@ function FeatureImportanceChart() {
   if (noModel) {
     return (
       <div className="flex flex-col items-center justify-center h-48 text-gray-500">
-        <span className="text-4xl mb-3">🤖</span>
+        <span className="text-4xl mb-3"></span>
         <p className="text-center text-sm">
           Train the AI model to see what drives your procrastination
         </p>

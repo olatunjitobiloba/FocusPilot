@@ -174,3 +174,29 @@ export const predictionsAPI = {
   getRiskHistory: () =>
     api.get('/predictions/risk/history'),
 };
+
+export const agentAPI = {
+  getStatus: () =>
+    api.get('/agent/status'),
+
+  triggerCycle: () =>
+    api.post('/agent/cycle'),
+
+  pause: () =>
+    api.post('/agent/pause'),
+
+  resume: () =>
+    api.post('/agent/resume'),
+
+  getEvents: (limit = 20) =>
+    api.get(`/agent/events?limit=${limit}`),
+
+  getInterventions: (limit = 20) =>
+    api.get(`/agent/interventions?limit=${limit}`),
+
+  getNotifications: () =>
+    api.get('/agent/notifications'),
+
+  markNotificationsRead: () =>
+    api.post('/agent/notifications/mark-read'),
+};

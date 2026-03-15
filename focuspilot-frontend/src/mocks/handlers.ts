@@ -157,7 +157,7 @@ export const handlers = [
 
   http.post(`${API_URL}/suggestions/accept`, () => {
     return HttpResponse.json({
-      message: '✅ instagram.com added to blocklist',
+      message: 'instagram.com added to blocklist',
       action:  'blocked'
     });
   }),

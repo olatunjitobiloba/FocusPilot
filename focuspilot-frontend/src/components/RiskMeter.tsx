@@ -42,10 +42,10 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
 
   // ── Color scheme by risk level ─────────────────────────────────────
   const colors = {
-    low:      { bg: 'bg-green-50',  border: 'border-green-200', text: 'text-green-700',  bar: 'bg-green-500',  icon: '🟢' },
-    medium:   { bg: 'bg-yellow-50', border: 'border-yellow-200',text: 'text-yellow-700', bar: 'bg-yellow-500', icon: '🟡' },
-    high:     { bg: 'bg-orange-50', border: 'border-orange-200',text: 'text-orange-700', bar: 'bg-orange-500', icon: '🟠' },
-    critical: { bg: 'bg-red-50',    border: 'border-red-200',   text: 'text-red-700',    bar: 'bg-red-500',    icon: '🔴' }
+    low:      { bg: 'bg-green-50',  border: 'border-green-200', text: 'text-green-700',  bar: 'bg-green-500',  icon: '' },
+    medium:   { bg: 'bg-yellow-50', border: 'border-yellow-200',text: 'text-yellow-700', bar: 'bg-yellow-500', icon: '' },
+    high:     { bg: 'bg-orange-50', border: 'border-orange-200',text: 'text-orange-700', bar: 'bg-orange-500', icon: '' },
+    critical: { bg: 'bg-red-50',    border: 'border-red-200',   text: 'text-red-700',    bar: 'bg-red-500',    icon: '' }
   };
 
   const c = colors[risk.risk_level] || colors.low;
@@ -126,7 +126,7 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
       {risk.top_risk_factors && risk.top_risk_factors.length > 0 && (
         <div>
           <p className="text-sm font-semibold text-gray-700 mb-2">
-            ⚠️ Risk Factors:
+            Risk Factors:
           </p>
           <div className="space-y-2">
             {risk.top_risk_factors.map((factor, i) => (
@@ -135,8 +135,8 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
                 className="flex items-start gap-2 text-sm"
               >
                 <span className="mt-0.5">
-                  {factor.severity === 'high'   ? '🔴' :
-                   factor.severity === 'medium' ? '🟡' : '🟢'}
+                  {factor.severity === 'high'   ? '[H]' :
+                   factor.severity === 'medium' ? '[M]' : '[L]'}
                 </span>
                 <div>
                   <span className="font-medium text-gray-800">
@@ -154,7 +154,7 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
       {!risk.model_available && (
         <div className="mt-3 p-3 bg-white bg-opacity-60 rounded-lg">
           <p className="text-sm text-gray-600">
-            🤖 Complete more focus sessions to enable AI predictions.
+            Complete more focus sessions to enable AI predictions.
             The model trains automatically after 5 sessions.
           </p>
         </div>
