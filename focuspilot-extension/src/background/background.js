@@ -1,5 +1,5 @@
 // extension/src/background/background.js
-const API_URL = 'https://OlatunjiTobi-focuspilot-agent.hf.space';
+const DEFAULT_API_URL = 'https://OlatunjiTobi-focuspilot-agent.hf.space';
 const DASHBOARD_URL_PATTERNS = [
   'http://localhost:3000/*',
   'https://focuspilot.vercel.app/*'
@@ -7,6 +7,58 @@ const DASHBOARD_URL_PATTERNS = [
 
 let activeSession = null;
 let blockedDomains = [];
+
+// Poll for agent-issued block/unblock commands.
+setInterval(checkBlockCommands, 30_000);
+setInterval(checkAgentNotifications, 30_000);
+
+const SEEN_NOTIFICATIONS_KEY = 'focuspilot_seen_notification_ids';
+
+function normalizeTimestamp(value) {
+  if (!value || typeof value !== 'string') return value;
+  const hasTimezone = /Z$|[+-]\d{2}:\d{2}$/.test(value);
+  return hasTimezone ? value : `${value}Z`;
+}
+
+async function getApiUrl() {
+  const result = await new Promise((resolve) => {
+    chrome.storage.local.get(['api_url'], resolve);
+  });
+
+  return result?.api_url || DEFAULT_API_URL;
+}
+
+function getNotificationIdentity(notification) {
+  return String(
+    notification?.id
+    || `${notification?.type || 'unknown'}:${notification?.created_at || ''}:${notification?.title || ''}`
+  );
+}
+
+async function getSeenNotificationIds() {
+  const result = await new Promise((resolve) => {
+    chrome.storage.local.get([SEEN_NOTIFICATIONS_KEY], resolve);
+  });
+
+  const ids = result?.[SEEN_NOTIFICATIONS_KEY];
+  return Array.isArray(ids) ? ids : [];
+}
+
+async function setSeenNotificationIds(ids) {
+  const compact = ids.slice(-300);
+  await new Promise((resolve) => {
+    chrome.storage.local.set({ [SEEN_NOTIFICATIONS_KEY]: compact }, resolve);
+  });
+}
+
+function showAgentNotification(notification) {
+  chrome.notifications.create(`focuspilot-agent-${getNotificationIdentity(notification)}`, {
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('assets/icon128.png'),
+    title: String(notification?.title || 'FocusPilot Alert'),
+    message: String(notification?.message || 'You have a new agent notification.')
+  });
+}
 
 function notifyDashboardSessionEvent(action, sessionId = null) {
   chrome.tabs.query({ url: DASHBOARD_URL_PATTERNS }, (tabs) => {
@@ -33,6 +85,15 @@ function notifyDashboardSessionEvent(action, sessionId = null) {
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Background received message:', message);
+
+  if (message.action === 'refreshRemoteBlockState') {
+    checkBlockCommands().then(() => {
+      sendResponse({ success: true });
+    }).catch((error) => {
+      sendResponse({ success: false, error: error.message });
+    });
+    return true;
+  }
   
   if (message.action === 'startSession') {
     console.log('Starting session with ID:', message.sessionId);
@@ -149,12 +210,13 @@ async function startSession(sessionId, tokenFromMessage, sessionStartTimeFromMes
 
 async function refreshBlocklistRules(tokenFromMessage) {
   const token = tokenFromMessage || (await getToken());
+  const apiUrl = await getApiUrl();
 
   if (!token) {
     throw new Error('Not authenticated. Please log in.');
   }
 
-  const response = await fetch(`${API_URL}/blocklist/`, {
+  const response = await fetch(`${apiUrl}/blocklist/`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -233,9 +295,10 @@ async function autoEndSession() {
   if (!sessionId) return;
 
   const token = await getToken();
+  const apiUrl = await getApiUrl();
   if (token) {
     try {
-      await fetch(`${API_URL}/sessions/end`, {
+      await fetch(`${apiUrl}/sessions/end`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -263,6 +326,123 @@ async function autoEndSession() {
     title: 'FocusPilot Session Complete',
     message: 'Your focus session has ended. Great work!'
   });
+}
+
+async function checkBlockCommands() {
+  const token = await getToken();
+  const apiUrl = await getApiUrl();
+  if (!token) return;
+
+  try {
+    const response = await fetch(`${apiUrl}/execution/block-state`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data?.is_blocked) {
+      await activateSiteBlock({
+        domains: data.blocked_domains || [],
+        unblock_at: data.unblock_at || null,
+      });
+    } else {
+      await deactivateSiteBlock();
+    }
+  } catch (error) {
+    console.error('Block command check error:', error);
+  }
+}
+
+async function checkAgentNotifications() {
+  const token = await getToken();
+  const apiUrl = await getApiUrl();
+  if (!token) return;
+
+  try {
+    const response = await fetch(`${apiUrl}/agent/notifications?unread_only=true&limit=50`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const data = await response.json();
+    const notifications = (data.notifications || []).filter(
+      (n) => n.type !== 'site_block' && n.type !== 'site_unblock'
+    );
+
+    const seenIds = await getSeenNotificationIds();
+    const seenSet = new Set(seenIds);
+
+    // Avoid notification storms the first time this runs.
+    if (seenIds.length === 0 && notifications.length > 0) {
+      await setSeenNotificationIds(notifications.map(getNotificationIdentity));
+      return;
+    }
+
+    const newNotifications = notifications.filter(
+      (n) => !seenSet.has(getNotificationIdentity(n))
+    );
+
+    if (newNotifications.length === 0) {
+      return;
+    }
+
+    newNotifications.forEach(showAgentNotification);
+
+    const merged = [...seenIds, ...newNotifications.map(getNotificationIdentity)];
+    await setSeenNotificationIds(merged);
+  } catch (error) {
+    console.error('Agent notification check error:', error);
+  }
+}
+
+async function activateSiteBlock(data) {
+  const domains = data.domains || [];
+  const unblockAt = normalizeTimestamp(data.unblock_at);
+
+  blockedDomains = domains;
+
+  await new Promise((resolve) => {
+    chrome.storage.local.set({
+      focusflow_blocked: true,
+      focusflow_domains: domains,
+      focusflow_unblock_at: unblockAt
+    }, resolve);
+  });
+
+  await applyBlockingRules();
+
+  console.log(`FocusFlow: Blocking ${domains.length} sites`);
+}
+
+async function deactivateSiteBlock() {
+  const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
+  const hadRules = currentRules.length > 0;
+
+  blockedDomains = [];
+
+  await new Promise((resolve) => {
+    chrome.storage.local.set({
+      focusflow_blocked: false,
+      focusflow_domains: [],
+      focusflow_unblock_at: null
+    }, resolve);
+  });
+
+  if (hadRules) {
+    await removeBlockingRules();
+  }
+
+  console.log('FocusFlow: Sites unblocked');
 }
 
 // APPLY BLOCKING RULES
@@ -405,12 +585,13 @@ async function logCurrentActivity() {
     const url = new URL(currentUrl);
     const domain = url.hostname;
     const token = await getToken();
+    const apiUrl = await getApiUrl();
     
     if (!token) return;
     
     console.log('Logging activity:', domain, duration, 'seconds');
     
-    const response = await fetch(`${API_URL}/sessions/${activeSession}/activity`, {
+    const response = await fetch(`${apiUrl}/sessions/${activeSession}/activity`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -439,12 +620,13 @@ async function logCurrentActivity() {
 // GET BLOCKLIST
 async function getBlocklist() {
   const token = await getToken();
+  const apiUrl = await getApiUrl();
   
   if (!token) {
     throw new Error('Not authenticated');
   }
   
-  const response = await fetch(`${API_URL}/blocklist/`, {
+  const response = await fetch(`${apiUrl}/blocklist/`, {
     headers: { 
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
@@ -510,6 +692,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
     
     const token = await getToken();
+    const apiUrl = await getApiUrl();
     
     if (!token) {
       chrome.notifications.create({
@@ -522,7 +705,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
     
     try {
-      const response = await fetch(`${API_URL}/blocklist/`, {
+      const response = await fetch(`${apiUrl}/blocklist/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -557,3 +740,5 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 console.log('FocusPilot background script loaded');
+void checkBlockCommands();
+void checkAgentNotifications();

@@ -1,5 +1,5 @@
 // popup.js
-const API_URL = "https://OlatunjiTobi-focuspilot-agent.hf.space";
+const DEFAULT_API_URL = "https://OlatunjiTobi-focuspilot-agent.hf.space";
 
 // DOM elements
 const authView = document.getElementById('authView');
@@ -58,7 +58,8 @@ async function showDashboard(user) {
 
 async function loadUserSettings() {
   try {
-    const response = await fetchWithAuth(`${API_URL}/settings`);
+    const apiUrl = await getApiUrl();
+    const response = await fetchWithAuth(`${apiUrl}/settings`);
     if (response && response.ok) {
       const settings = await response.json();
       await setStorage({ userSettings: settings });
@@ -79,6 +80,11 @@ function getStorage(keys) {
   return new Promise((resolve) => {
     chrome.storage.local.get(keys, (result) => resolve(result));
   });
+}
+
+async function getApiUrl() {
+  const { api_url } = await getStorage(['api_url']);
+  return api_url || DEFAULT_API_URL;
 }
 
 async function initializeAuthState() {
@@ -180,9 +186,10 @@ async function handleAuthExpired() {
 async function refreshAccessToken() {
   const { refresh_token } = await getStorage(['refresh_token']);
   if (!refresh_token) return null;
+  const apiUrl = await getApiUrl();
 
   if (!refreshInProgress) {
-    refreshInProgress = fetch(`${API_URL}/auth/refresh`, {
+    refreshInProgress = fetch(`${apiUrl}/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -373,7 +380,8 @@ async function loadSessionState() {
   const requestId = ++sessionStateRequestCounter;
 
   try {
-    const response = await fetchWithAuth(`${API_URL}/sessions/active`);
+    const apiUrl = await getApiUrl();
+    const response = await fetchWithAuth(`${apiUrl}/sessions/active`);
 
     if (!response) {
       if (requestId !== sessionStateRequestCounter || sessionStartInProgress) {
@@ -509,9 +517,10 @@ logoutBtn.addEventListener('click', () => {
 // Load stats
 async function loadStats() {
   try {
+    const apiUrl = await getApiUrl();
     const [dailyResponse, weeklyResponse] = await Promise.all([
-      fetchWithAuth(`${API_URL}/stats/daily`),
-      fetchWithAuth(`${API_URL}/stats/weekly`)
+      fetchWithAuth(`${apiUrl}/stats/daily`),
+      fetchWithAuth(`${apiUrl}/stats/weekly`)
     ]);
 
     if (!dailyResponse || !weeklyResponse) {
@@ -545,7 +554,8 @@ async function loadStats() {
 
 async function loadRiskScore() {
   try {
-    const response = await fetchWithAuth(`${API_URL}/predictions/risk`);
+    const apiUrl = await getApiUrl();
+    const response = await fetchWithAuth(`${apiUrl}/predictions/risk`);
     if (!response || !response.ok) return;
 
     const risk = await response.json();
@@ -644,7 +654,8 @@ async function startSession() {
   if (startSessionBtn) startSessionBtn.disabled = true;
 
   try {
-    const response = await fetchWithAuth(`${API_URL}/sessions/start`, {
+    const apiUrl = await getApiUrl();
+    const response = await fetchWithAuth(`${apiUrl}/sessions/start`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -746,6 +757,7 @@ async function startSession() {
 async function endSession() {
   try {
     const { activeSessionId } = await getStorage(['activeSessionId']);
+    const apiUrl = await getApiUrl();
 
     // Optimistic UI update for instant feedback
     window.top?.postMessage({
@@ -762,7 +774,7 @@ async function endSession() {
     let sessionId = activeSessionId;
 
     if (!sessionId) {
-      const activeResponse = await fetchWithAuth(`${API_URL}/sessions/active`);
+      const activeResponse = await fetchWithAuth(`${apiUrl}/sessions/active`);
       if (!activeResponse) {
         alert('Please log in first.');
         return;
@@ -779,7 +791,7 @@ async function endSession() {
     }
 
     if (sessionId) {
-      const endResponse = await fetchWithAuth(`${API_URL}/sessions/end`, {
+      const endResponse = await fetchWithAuth(`${apiUrl}/sessions/end`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
