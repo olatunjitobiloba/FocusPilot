@@ -567,10 +567,10 @@ function displayRiskScore(risk) {
   };
 
   const icons = {
-    low: '🟢',
-    medium: '🟡',
-    high: '🟠',
-    critical: '🔴'
+    low: '',
+    medium: '',
+    high: '',
+    critical: ''
   };
 
   const level = String(risk?.risk_level || 'low').toLowerCase();
@@ -629,7 +629,7 @@ function displayRiskScore(risk) {
         <div style="margin-top: 8px; border-top: 1px solid #e5e7eb; padding-top: 8px;">
           ${topFactors.slice(0, 2).map((f) => `
             <p style="font-size: 11px; color: #6b7280; margin-bottom: 3px;">
-              ⚠️ ${f.factor}
+              ${f.factor}
             </p>
           `).join('')}
         </div>
