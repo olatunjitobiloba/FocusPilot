@@ -8,6 +8,7 @@ from app.auth import get_current_user_id
 from app.database import get_supabase
 from app.ml.agent.orchestrator import orchestrator
 from datetime import datetime, timedelta
+import re
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
 
@@ -27,6 +28,42 @@ def _normalize_persisted_state(raw_state):
     if isinstance(raw_state, str) and raw_state:
         return raw_state
     return 'idle'
+
+
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F300-\U0001F5FF"
+    "\U0001F600-\U0001F64F"
+    "\U0001F680-\U0001F6FF"
+    "\U0001F700-\U0001F77F"
+    "\U0001F780-\U0001F7FF"
+    "\U0001F800-\U0001F8FF"
+    "\U0001F900-\U0001F9FF"
+    "\U0001FA00-\U0001FAFF"
+    "\U00002700-\U000027BF"
+    "\U00002600-\U000026FF"
+    "]+",
+    flags=re.UNICODE,
+)
+
+
+def _strip_emoji(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+    return _EMOJI_RE.sub('', text).strip()
+
+
+def _normalize_notification(notification: dict) -> dict:
+    normalized = dict(notification)
+    title = _strip_emoji(normalized.get('title', ''))
+    message = _strip_emoji(normalized.get('message', ''))
+
+    if title.lower() == 'procrastination detected':
+        title = 'Focus Reminder'
+
+    normalized['title'] = title
+    normalized['message'] = message
+    return normalized
 
 
 @router.get("/status")
@@ -167,10 +204,11 @@ def get_notifications(
         query = query.eq('read', False)
 
     result = query.execute()
+    notifications = [_normalize_notification(n) for n in (result.data or [])]
 
     return {
-        'notifications': result.data or [],
-        'unread_count': len(result.data or []),
+        'notifications': notifications,
+        'unread_count': len(notifications),
     }
 
 

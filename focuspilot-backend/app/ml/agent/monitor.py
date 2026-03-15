@@ -26,6 +26,7 @@ from app.ml.agent.observer     import Observer
 from app.ml.agent.assessor     import Assessor
 from app.ml.agent.states       import AgentState, StateMachine
 from app.ml.agent.alert_system import AlertSystem
+from app.ml.agent.decision_engine import DecisionEngine
 
 
 class MonitoringAgent:
@@ -42,6 +43,7 @@ class MonitoringAgent:
         self.assessor      = Assessor(user_id)
         self.state_machine = StateMachine(AgentState.IDLE)
         self.alert_system  = AlertSystem(user_id)
+        self.decision_engine = DecisionEngine(user_id)
         self.supabase      = get_supabase()
 
         # Agent memory
@@ -150,27 +152,29 @@ class MonitoringAgent:
         observation: Dict
     ) -> Optional[Dict]:
         """
-        Take action when state changes.
-        Returns action dict or None.
+        Use Decision Engine to decide what action to take.
         """
         new_state = self.state_machine.current_state
 
-        if new_state == AgentState.AT_RISK:
-            return self.alert_system.send_warning(
-                risk_score=assessment['risk_score'],
-                signals=assessment['signals']
-            )
-
-        elif new_state == AgentState.INTERVENING:
-            self.interventions_today += 1
-            return self.alert_system.send_intervention(
-                risk_score=assessment['risk_score'],
-                signals=assessment['signals'],
+        if new_state in [AgentState.AT_RISK, AgentState.INTERVENING]:
+            # Let the Decision Engine decide
+            decision = self.decision_engine.decide(
+                assessment=assessment,
                 observation=observation
             )
 
+            if decision['should_intervene']:
+                self.interventions_today += 1
+                # Send the alert
+                return self.alert_system.send_intervention(
+                    risk_score=assessment['risk_score'],
+                    signals=assessment['signals'],
+                    observation=observation,
+                    message=decision['message'],
+                    intervention_type=decision['intervention_type']
+                )
+
         elif new_state == AgentState.ACTIVE:
-            # Recovered from at-risk
             if self.state_machine.history:
                 prev = self.state_machine.history[-1]['from']
                 if prev in [AgentState.AT_RISK, AgentState.INTERVENING]:

@@ -12,7 +12,7 @@ Alert types:
 """
 
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List
 from app.database import get_supabase
 
 
@@ -54,18 +54,25 @@ class AlertSystem:
         self,
         risk_score: float,
         signals: List[str],
-        observation: Dict
+        observation: Dict,
+        message: str = None,
+        intervention_type: str = None
     ) -> Dict:
         """
         Send a strong intervention when risk is critical.
         Risk level: critical (>= 0.75)
         """
-        message       = self._build_intervention_message(risk_score, signals)
-        intervention_type = self._choose_intervention_type(observation)
+        if not message:
+            message = self._build_intervention_message(risk_score, signals)
+
+        if not intervention_type:
+            intervention_type = self._choose_intervention_type(observation)
+
+        title = self._intervention_title(intervention_type)
 
         alert = {
             'type':              'intervention',
-            'title':             'Procrastination Detected',
+            'title':             title,
             'message':           message,
             'risk_score':        risk_score,
             'signals':           signals,
@@ -177,6 +184,18 @@ class AlertSystem:
             return 'break_suggestion'
 
         return 'focus_reminder'
+
+    def _intervention_title(self, intervention_type: str) -> str:
+        """Build a user-facing title from the intervention type."""
+        title_map = {
+            'focus_reminder': 'Focus Reminder',
+            'break_suggestion': 'Break Suggestion',
+            'site_block': 'Site Block Activated',
+            'session_restart': 'Session Restart Suggested',
+            'motivational_message': 'Motivational Message',
+            'accountability_check': 'Accountability Check'
+        }
+        return title_map.get(intervention_type, 'Procrastination Detected')
 
     # ── Persistence ────────────────────────────────────────────────────
 

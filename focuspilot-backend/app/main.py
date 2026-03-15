@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.ml.agent.orchestrator import orchestrator
-from app.routes import auth, sessions, agent as agent_router, stats, blocklist, analytics, recommendations, suggestions, health, whitelist, ml_data, settings, predictions
+from app.routes import auth, sessions, agent as agent_router, stats, blocklist, analytics, recommendations, suggestions, health, whitelist, ml_data, settings, predictions, decisions
 from app.database import get_supabase
 
 app = FastAPI(
@@ -39,6 +39,7 @@ app.include_router(whitelist.router)
 app.include_router(ml_data.router)
 app.include_router(settings.router)
 app.include_router(predictions.router)
+app.include_router(decisions.router)
 
 
 @app.on_event("startup")
