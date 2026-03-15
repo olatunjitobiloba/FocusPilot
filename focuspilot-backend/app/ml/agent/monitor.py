@@ -27,6 +27,7 @@ from app.ml.agent.assessor     import Assessor
 from app.ml.agent.states       import AgentState, StateMachine
 from app.ml.agent.alert_system import AlertSystem
 from app.ml.agent.decision_engine import DecisionEngine
+from app.ml.agent.execution_agent import ExecutionAgent
 
 
 class MonitoringAgent:
@@ -44,6 +45,7 @@ class MonitoringAgent:
         self.state_machine = StateMachine(AgentState.IDLE)
         self.alert_system  = AlertSystem(user_id)
         self.decision_engine = DecisionEngine(user_id)
+        self.execution_agent = ExecutionAgent(user_id)
         self.supabase      = get_supabase()
 
         # Agent memory
@@ -157,7 +159,7 @@ class MonitoringAgent:
         new_state = self.state_machine.current_state
 
         if new_state in [AgentState.AT_RISK, AgentState.INTERVENING]:
-            # Let the Decision Engine decide
+            # Decision Engine decides what to do.
             decision = self.decision_engine.decide(
                 assessment=assessment,
                 observation=observation
@@ -165,14 +167,26 @@ class MonitoringAgent:
 
             if decision['should_intervene']:
                 self.interventions_today += 1
-                # Send the alert
-                return self.alert_system.send_intervention(
+
+                # Alert system notifies user.
+                self.alert_system.send_intervention(
                     risk_score=assessment['risk_score'],
                     signals=assessment['signals'],
                     observation=observation,
                     message=decision['message'],
                     intervention_type=decision['intervention_type']
                 )
+
+                # Execution Agent acts autonomously.
+                execution = self.execution_agent.execute(
+                    decision=decision,
+                    observation=observation
+                )
+
+                return {
+                    'decision': decision,
+                    'execution': execution
+                }
 
         elif new_state == AgentState.ACTIVE:
             if self.state_machine.history:
