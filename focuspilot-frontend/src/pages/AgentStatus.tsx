@@ -168,14 +168,16 @@ function AgentStatus() {
                   {notifications.length} New Notification
                   {notifications.length > 1 ? 's' : ''}
                 </p>
-                {notifications.slice(0, 2).map((n: any) => (
-                  <div key={n.id} className="mb-2">
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                {notifications.map((n: any) => (
+                  <div key={n.id} className="border-b border-yellow-100 pb-2 last:border-b-0 last:pb-0">
                     <p className="font-medium text-yellow-900 text-sm">
                       {stripEmoji(n.title)}
                     </p>
                     <p className="text-yellow-700 text-sm">{stripEmoji(n.message)}</p>
                   </div>
                 ))}
+                </div>
               </div>
               <button
                 onClick={handleMarkRead}

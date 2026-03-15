@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import AgentStatus from './pages/AgentStatus';
 import Blocklist from './pages/Blocklist';
 import Settings  from './pages/Settings';
+import ExecutionLog from './pages/ExecutionLog';
 import { applyTheme, getStoredTheme } from './utils/theme';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -42,6 +43,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/execution"
+          element={
+            <ProtectedRoute>
+              <ExecutionLog />
             </ProtectedRoute>
           }
         />

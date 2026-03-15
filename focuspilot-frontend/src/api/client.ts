@@ -47,6 +47,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
             token: newAccessToken,
             refreshToken: newRefreshToken,
             user,
+            apiUrl: API_URL,
           },
           '*'
         );
@@ -194,9 +195,32 @@ export const agentAPI = {
   getInterventions: (limit = 20) =>
     api.get(`/agent/interventions?limit=${limit}`),
 
-  getNotifications: () =>
-    api.get('/agent/notifications'),
+  getNotifications: (limit = 50) =>
+    api.get(`/agent/notifications?limit=${limit}`),
 
   markNotificationsRead: () =>
     api.post('/agent/notifications/mark-read'),
+};
+
+export const executionAPI = {
+  getActions: (limit = 20) =>
+    api.get(`/execution/actions?limit=${limit}`),
+
+  getUndoable: () =>
+    api.get('/execution/undoable'),
+
+  undoAction: (id: string) =>
+    api.post(`/execution/undo/${id}`),
+
+  getBlockState: () =>
+    api.get('/execution/block-state'),
+
+  manualBlock: (minutes: number) =>
+    api.post('/execution/block', { duration_minutes: minutes }),
+
+  manualUnblock: () =>
+    api.post('/execution/unblock'),
+
+  sendNudge: (title: string, message: string) =>
+    api.post('/execution/nudge', { title, message }),
 };

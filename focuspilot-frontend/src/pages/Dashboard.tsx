@@ -5,10 +5,12 @@ import {
 } from 'recharts';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, whitelistAPI } from '../api/client';
+import { API_URL } from '../config';
 import SessionControl from '../components/SessionControl';
 import Navbar from '../components/Navbar';
 import RiskMeter from '../components/RiskMeter';
 import FeatureImportanceChart from '../components/FeatureImportanceChart';
+import BlockStateWidget from '../components/BlockStateWidget';
 
 interface Stats {
   todayHours: number;
@@ -359,7 +361,8 @@ export default function Dashboard() {
       window.postMessage({
         source: 'focuspilot-web',
         action: 'syncToken',
-        token
+        token,
+        apiUrl: API_URL,
       }, '*');
     }
   }, []);
@@ -521,6 +524,9 @@ export default function Dashboard() {
               <>
             {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="col-span-2 md:col-span-4">
+                <BlockStateWidget />
+              </div>
               <StatCard
                 icon="TF"
                 label="Today's Focus"
