@@ -10,7 +10,7 @@ Rules:
 """
 
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from app.database import get_supabase
 
 
@@ -132,7 +132,3 @@ class CooldownManager:
         )
 
         return result.data or []
-
-
-# Fix missing import
-from typing import Any
