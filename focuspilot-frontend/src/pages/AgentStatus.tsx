@@ -11,6 +11,13 @@ const STATE_CONFIG = {
   paused:      { color: 'bg-blue-100  text-blue-700',  icon: '',   label: 'Paused'       }
 };
 
+const stripEmoji = (value: string | undefined | null): string => {
+  if (!value) return '';
+  return value
+    .replace(/[\u2600-\u27BF]|[\uD83C-\uDBFF][\uDC00-\uDFFF]/g, '')
+    .trim();
+};
+
 function AgentStatus() {
   const [status,        setStatus]        = useState<any>(null);
   const [events,        setEvents]        = useState<any[]>([]);
@@ -18,6 +25,7 @@ function AgentStatus() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [cycling,       setCycling]       = useState(false);
+  const [error,         setError]         = useState('');
   const [activeTab,     setActiveTab]     = useState<'events' | 'interventions'>('events');
 
   useEffect(() => {
@@ -29,6 +37,7 @@ function AgentStatus() {
 
   const loadAll = async () => {
     try {
+      setError('');
       const [statusRes, eventsRes, interventionsRes, notifRes] =
         await Promise.all([
           agentAPI.getStatus(),
@@ -41,8 +50,9 @@ function AgentStatus() {
       setEvents(eventsRes.data.events);
       setInterventions(interventionsRes.data.interventions);
       setNotifications(notifRes.data.notifications);
-    } catch (error) {
-      console.error('Error loading agent data:', error);
+    } catch (err: any) {
+      console.error('Error loading agent data:', err);
+      setError(err?.response?.data?.detail || err?.message || 'Could not load agent data.');
     } finally {
       setLoading(false);
     }
@@ -51,25 +61,41 @@ function AgentStatus() {
   const handleTriggerCycle = async () => {
     setCycling(true);
     try {
+      setError('');
       await agentAPI.triggerCycle();
       await loadAll();
+    } catch (err: any) {
+      console.error('Error triggering cycle:', err);
+      setError(err?.response?.data?.detail || err?.message || 'Could not trigger cycle.');
     } finally {
       setCycling(false);
     }
   };
 
   const handleTogglePause = async () => {
-    if (status?.state === 'paused') {
-      await agentAPI.resume();
-    } else {
-      await agentAPI.pause();
+    try {
+      setError('');
+      if (status?.state === 'paused') {
+        await agentAPI.resume();
+      } else {
+        await agentAPI.pause();
+      }
+      await loadAll();
+    } catch (err: any) {
+      console.error('Error toggling pause state:', err);
+      setError(err?.response?.data?.detail || err?.message || 'Could not update agent state.');
     }
-    await loadAll();
   };
 
   const handleMarkRead = async () => {
-    await agentAPI.markNotificationsRead();
-    setNotifications([]);
+    try {
+      setError('');
+      await agentAPI.markNotificationsRead();
+      setNotifications([]);
+    } catch (err: any) {
+      console.error('Error marking notifications read:', err);
+      setError(err?.response?.data?.detail || err?.message || 'Could not mark notifications as read.');
+    }
   };
 
   if (loading) {
@@ -93,6 +119,12 @@ function AgentStatus() {
       <Navbar />
 
       <main className="max-w-5xl mx-auto px-4 py-8">
+
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
@@ -122,7 +154,7 @@ function AgentStatus() {
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
-              {status?.state === 'paused' ? '▶ Resume Agent' : '⏸ Pause Agent'}
+              {status?.state === 'paused' ? 'Resume Agent' : 'Pause Agent'}
             </button>
           </div>
         </div>
@@ -139,9 +171,9 @@ function AgentStatus() {
                 {notifications.slice(0, 2).map((n: any) => (
                   <div key={n.id} className="mb-2">
                     <p className="font-medium text-yellow-900 text-sm">
-                      {n.title}
+                      {stripEmoji(n.title)}
                     </p>
-                    <p className="text-yellow-700 text-sm">{n.message}</p>
+                    <p className="text-yellow-700 text-sm">{stripEmoji(n.message)}</p>
                   </div>
                 ))}
               </div>
@@ -336,7 +368,7 @@ function EventCard({ event }: { event: any }) {
         )}
         {event.event_data?.signals?.length > 0 && (
           <p className="text-xs text-gray-400 mt-1">
-            {event.event_data.signals[0]}
+            {stripEmoji(event.event_data.signals[0])}
           </p>
         )}
       </div>
@@ -379,7 +411,7 @@ function InterventionCard({ intervention }: { intervention: any }) {
       </p>
       {intervention.trigger_reason && (
         <p className="text-xs text-gray-400 mt-1">
-          {intervention.trigger_reason}
+          {stripEmoji(intervention.trigger_reason)}
         </p>
       )}
     </div>

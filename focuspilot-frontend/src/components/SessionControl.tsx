@@ -127,12 +127,20 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
           setHasActiveSessionConflict(false);
           autoEndingRef.current = false;
           onSessionEnd();
-          setTimeout(() => loadActiveSession(), 300);
+          setTimeout(() => {
+            void loadActiveSession().catch(() => {
+              // Ignore transient backend errors during post-end reconciliation.
+            });
+          }, 300);
           return;
         }
 
         if (action === 'startSession') {
-          setTimeout(() => loadActiveSession(), 100);
+          setTimeout(() => {
+            void loadActiveSession().catch(() => {
+              // Ignore transient backend errors while syncing external session start.
+            });
+          }, 100);
         }
       }
     };
@@ -451,7 +459,9 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     } finally {
       setLoading(false);
       setLastAction(null);
-      loadActiveSession();
+      void loadActiveSession().catch(() => {
+        // Avoid uncaught promise rejections when backend is temporarily unavailable.
+      });
     }
   }, [elapsed, loadActiveSession, notifyExtension, onSessionEnd, sessionId, sessionStartTimeMs]);
 

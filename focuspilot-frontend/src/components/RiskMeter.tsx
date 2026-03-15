@@ -3,6 +3,18 @@ import React, { useEffect, useState } from 'react';
 import { predictionsAPI } from '../api/client';
 import { RiskPrediction } from '../types/predictions';
 
+const FALLBACK_RISK: RiskPrediction = {
+  risk_score: 0,
+  risk_percentage: 0,
+  risk_level: 'low',
+  will_procrastinate: false,
+  confidence: 'low',
+  model_available: false,
+  top_risk_factors: [],
+  assessed_at: new Date().toISOString(),
+  message: 'Risk data temporarily unavailable. Collecting data for AI model.'
+};
+
 interface RiskMeterProps {
   compact?: boolean;       // For extension popup (smaller)
   autoRefresh?: boolean;   // Poll every 60 seconds
@@ -12,6 +24,18 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
   const [risk, setRisk]       = useState<RiskPrediction | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const loadRisk = React.useCallback(async () => {
+    try {
+      const response = await predictionsAPI.getRisk();
+      setRisk(response.data);
+    } catch (error) {
+      console.error('Error loading risk:', error);
+      setRisk(FALLBACK_RISK);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadRisk();
 
@@ -19,18 +43,7 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
       const interval = setInterval(loadRisk, 60_000); // Every 60s
       return () => clearInterval(interval);
     }
-  }, [autoRefresh]);
-
-  const loadRisk = async () => {
-    try {
-      const response = await predictionsAPI.getRisk();
-      setRisk(response.data);
-    } catch (error) {
-      console.error('Error loading risk:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [autoRefresh, loadRisk]);
 
   if (loading) {
     return (
@@ -38,7 +51,7 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
     );
   }
 
-  if (!risk) return null;
+  const safeRisk = risk || FALLBACK_RISK;
 
   // ── Color scheme by risk level ─────────────────────────────────────
   const colors = {
@@ -48,29 +61,30 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
     critical: { bg: 'bg-red-50',    border: 'border-red-200',   text: 'text-red-700',    bar: 'bg-red-500',    icon: '' }
   };
 
-  const c = colors[risk.risk_level] || colors.low;
+  const c = colors[safeRisk.risk_level] || colors.low;
+  const cardShellClass = 'bg-white border-2 border-green-300 shadow-sm';
 
   // ── Compact version (for extension popup) ─────────────────────────
   if (compact) {
     return (
-      <div className={`${c.bg} border ${c.border} rounded-lg p-3`}>
+      <div className={`${cardShellClass} rounded-lg p-3`}>
         <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-semibold text-gray-700">
+          <span className="text-sm font-semibold text-gray-900">
             {c.icon} Procrastination Risk
           </span>
           <span className={`text-lg font-bold ${c.text}`}>
-            {risk.risk_percentage}%
+            {safeRisk.risk_percentage}%
           </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div
             className={`${c.bar} h-2 rounded-full transition-all duration-500`}
-            style={{ width: `${risk.risk_percentage}%` }}
+            style={{ width: `${safeRisk.risk_percentage}%` }}
           />
         </div>
         <p className={`text-xs ${c.text} mt-1 capitalize`}>
-          {risk.risk_level} risk
-          {!risk.model_available && ' (collecting data)'}
+          {safeRisk.risk_level} risk
+          {!safeRisk.model_available && ' (collecting data)'}
         </p>
       </div>
     );
@@ -78,7 +92,7 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
 
   // ── Full version (for dashboard) ──────────────────────────────────
   return (
-    <div className={`${c.bg} border ${c.border} rounded-xl p-6`}>
+    <div className={`${cardShellClass} rounded-xl p-6`}>
 
       {/* Header */}
       <div className="flex justify-between items-start mb-4">
@@ -87,8 +101,8 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
             {c.icon} Procrastination Risk
           </h3>
           <p className="text-sm text-gray-500 mt-0.5">
-            {risk.model_available
-              ? `Updated ${new Date(risk.assessed_at).toLocaleTimeString()}`
+            {safeRisk.model_available
+              ? `Updated ${new Date(safeRisk.assessed_at).toLocaleTimeString()}`
               : 'Collecting data for AI model'
             }
           </p>
@@ -97,10 +111,10 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
         {/* Big risk percentage */}
         <div className="text-right">
           <p className={`text-4xl font-bold ${c.text}`}>
-            {risk.risk_percentage}%
+            {safeRisk.risk_percentage}%
           </p>
           <p className={`text-sm font-medium ${c.text} capitalize`}>
-            {risk.risk_level} risk
+            {safeRisk.risk_level} risk
           </p>
         </div>
       </div>
@@ -110,7 +124,7 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
         <div className="w-full bg-gray-200 rounded-full h-4">
           <div
             className={`${c.bar} h-4 rounded-full transition-all duration-700`}
-            style={{ width: `${risk.risk_percentage}%` }}
+            style={{ width: `${safeRisk.risk_percentage}%` }}
           />
         </div>
         {/* Scale labels */}
@@ -123,13 +137,13 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
       </div>
 
       {/* Risk factors */}
-      {risk.top_risk_factors && risk.top_risk_factors.length > 0 && (
+      {safeRisk.top_risk_factors && safeRisk.top_risk_factors.length > 0 && (
         <div>
           <p className="text-sm font-semibold text-gray-700 mb-2">
             Risk Factors:
           </p>
           <div className="space-y-2">
-            {risk.top_risk_factors.map((factor, i) => (
+            {safeRisk.top_risk_factors.map((factor, i) => (
               <div
                 key={i}
                 className="flex items-start gap-2 text-sm"
@@ -151,25 +165,24 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
       )}
 
       {/* No model message */}
-      {!risk.model_available && (
+      {!safeRisk.model_available && (
         <div className="mt-3 p-3 bg-white bg-opacity-60 rounded-lg">
           <p className="text-sm text-gray-600">
-            Complete more focus sessions to enable AI predictions.
-            The model trains automatically after 5 sessions.
+            {safeRisk.message || 'Complete more focus sessions to enable AI predictions. The model trains automatically after 5 sessions.'}
           </p>
         </div>
       )}
 
       {/* Confidence badge */}
-      {risk.model_available && (
+      {safeRisk.model_available && (
         <div className="mt-3 flex items-center gap-2">
           <span className="text-xs text-gray-500">Model confidence:</span>
           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-            risk.confidence === 'high'   ? 'bg-green-100 text-green-700'  :
-            risk.confidence === 'medium' ? 'bg-yellow-100 text-yellow-700':
+            safeRisk.confidence === 'high'   ? 'bg-green-100 text-green-700'  :
+            safeRisk.confidence === 'medium' ? 'bg-yellow-100 text-yellow-700':
                                            'bg-gray-100 text-gray-600'
           }`}>
-            {risk.confidence}
+            {safeRisk.confidence}
           </span>
         </div>
       )}
