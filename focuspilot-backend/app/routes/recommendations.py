@@ -27,6 +27,15 @@ def parse_iso_datetime(value: str) -> datetime:
 
     return datetime.fromisoformat(text)
 
+
+def normalize_domain(value: str) -> str:
+    domain = (value or '').strip().lower()
+    domain = domain.replace('https://', '').replace('http://', '')
+    domain = domain.split('/')[0]
+    if domain.startswith('www.'):
+        domain = domain[4:]
+    return domain
+
 @router.get("/")
 def get_recommendations(user_id: str = Depends(get_current_user_id)):
     """
@@ -84,7 +93,10 @@ def get_recommendations(user_id: str = Depends(get_current_user_id)):
                 # Count domain frequency
                 domain_count = defaultdict(int)
                 for activity in problem_activities:
-                    domain_count[activity['domain']] += 1
+                    domain = normalize_domain(activity.get('domain', ''))
+                    if not domain:
+                        continue
+                    domain_count[domain] += 1
                 
                 # Get top 3 problematic domains
                 top_domains = sorted(domain_count.items(), key=lambda x: x[1], reverse=True)[:3]

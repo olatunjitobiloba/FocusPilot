@@ -15,6 +15,7 @@ The Execution Agent:
 
 from datetime import datetime
 from typing import Dict, Any, Optional
+from uuid import UUID
 
 from app.ml.agent.actions      import get_action, ACTION_REGISTRY
 from app.ml.agent.action_logger import ActionLogger
@@ -27,6 +28,20 @@ from app.database import get_supabase
 
 
 class ExecutionAgent:
+
+    ACTION_ALIAS_TO_TYPE = {
+        'block': 'block_sites',
+        'session': 'start_session',
+        'nudge': 'schedule_nudge',
+        'focus': 'activate_focus_mode',
+    }
+
+    NUDGE_TITLE_BY_INTERVENTION = {
+        'focus_reminder': 'Focus Reminder',
+        'motivational_message': 'Motivational Boost',
+        'break_suggestion': 'Break Suggestion',
+        'accountability_check': 'Accountability Check',
+    }
 
     def __init__(self, user_id: str):
         self.user_id  = user_id
@@ -126,6 +141,59 @@ class ExecutionAgent:
 
     # ── Undo ───────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _is_valid_uuid(value: str) -> bool:
+        try:
+            UUID(str(value))
+            return True
+        except (TypeError, ValueError):
+            return False
+
+    def _resolve_action_id(self, action_ref: str) -> Optional[str]:
+        """
+        Resolve either an action UUID or a friendly alias (e.g. 'block').
+        """
+        if self._is_valid_uuid(action_ref):
+            return action_ref
+
+        action_type = self.ACTION_ALIAS_TO_TYPE.get(str(action_ref).lower())
+        if not action_type:
+            return None
+
+        result = (
+            self.supabase
+            .table('agent_actions')
+            .select('id')
+            .eq('user_id', self.user_id)
+            .eq('action_type', action_type)
+            .eq('is_undoable', True)
+            .order('created_at', desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if not result.data:
+            return None
+
+        return result.data[0].get('id')
+
+    def _undo_alias_fallback(self, action_ref: str) -> Optional[Dict[str, Any]]:
+        """
+        Support manual undo flows when no agent_actions row exists.
+        """
+        ref = str(action_ref).lower()
+
+        if ref in {'block', 'focus'}:
+            self.blocker.unblock()
+            return {
+                'undone': True,
+                'action_type': 'unblock_sites',
+                'action_id': None,
+                'message': 'Sites have been unblocked'
+            }
+
+        return None
+
     def undo(self, action_id: str) -> Dict[str, Any]:
         """
         Undo a previously executed action.
@@ -135,12 +203,26 @@ class ExecutionAgent:
         - start_session → end_session
         - schedule_nudge → cancel scheduled action
         """
+        resolved_action_id = self._resolve_action_id(action_id)
+        if not resolved_action_id:
+            fallback_result = self._undo_alias_fallback(action_id)
+            if fallback_result:
+                return fallback_result
+
+            return {
+                'undone': False,
+                'reason': (
+                    "Action not found. Use a valid action UUID "
+                    "or alias: block, session, nudge, focus"
+                )
+            }
+
         # Get action from DB
         result = (
             self.supabase
             .table('agent_actions')
             .select("*")
-            .eq('id', action_id)
+            .eq('id', resolved_action_id)
             .eq('user_id', self.user_id)
             .execute()
         )
@@ -190,11 +272,12 @@ class ExecutionAgent:
             elif action_type == 'activate_focus_mode':
                 self.blocker.unblock()
 
-            self.logger.mark_undone(action_id)
+            self.logger.mark_undone(resolved_action_id)
 
             return {
                 'undone':      True,
                 'action_type': action_type,
+                'action_id':   resolved_action_id,
                 'message':     f'{action_type} has been undone'
             }
 
@@ -267,8 +350,12 @@ class ExecutionAgent:
             }
 
         elif action_type == 'send_nudge':
+            nudge_title = self.NUDGE_TITLE_BY_INTERVENTION.get(
+                iv_type,
+                'Focus Reminder'
+            )
             return {
-                'title':   '🎯 Focus Reminder',
+                'title':   nudge_title,
                 'message': message
             }
 

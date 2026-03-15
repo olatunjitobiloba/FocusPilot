@@ -88,6 +88,10 @@ def normalize_agent_state_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         if last_assessed and not normalized.get('last_cycle'):
             normalized['last_cycle'] = last_assessed
 
+    # Ensure schema-required state is always present.
+    if normalized.get('state') in (None, ''):
+        normalized['state'] = 'idle'
+
     return normalized
 
 

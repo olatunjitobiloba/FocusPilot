@@ -26,6 +26,10 @@ DISTRACTION_DOMAINS = {
 }
 
 
+def normalize_domain(value: str) -> str:
+    return (value or '').strip().lower().replace('www.', '')
+
+
 class FeatureEngineer:
 
     def build_feature_matrix(
@@ -134,7 +138,7 @@ class FeatureEngineer:
         # Separate distraction vs productive activities
         distraction_acts = [
             a for a in activities
-            if a.get('domain', '') in DISTRACTION_DOMAINS
+            if normalize_domain(a.get('domain', '')) in DISTRACTION_DOMAINS
         ]
 
         # Total time on distraction sites
@@ -302,7 +306,7 @@ class FeatureEngineer:
         distraction_seconds = sum(
             a.get('duration_seconds') or 0
             for a in activities
-            if a.get('domain', '') in DISTRACTION_DOMAINS
+            if normalize_domain(a.get('domain', '')) in DISTRACTION_DOMAINS
         )
         distraction_ratio = (
             (distraction_seconds / 60) / duration

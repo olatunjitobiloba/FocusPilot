@@ -16,6 +16,10 @@ from typing import Dict, Any, Optional, List
 from app.database import get_supabase
 
 
+def _normalize_domain(value: str) -> str:
+    return (value or '').strip().lower().replace('www.', '')
+
+
 class Observer:
 
     def __init__(self, user_id: str):
@@ -121,7 +125,7 @@ class Observer:
         # Recent distraction analysis (last 10 minutes)
         distraction_acts = [
             a for a in recent_activity
-            if a.get('domain', '') in DISTRACTION_DOMAINS
+            if _normalize_domain(a.get('domain', '')) in DISTRACTION_DOMAINS
         ]
 
         distraction_seconds_recent = sum(
@@ -141,7 +145,7 @@ class Observer:
 
         # Last visited domain
         last_domain = (
-            recent_activity[0].get('domain')
+            _normalize_domain(recent_activity[0].get('domain'))
             if recent_activity else None
         )
 

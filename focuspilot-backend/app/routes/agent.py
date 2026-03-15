@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, BackgroundTasks
 from app.auth import get_current_user_id
 from app.database import get_supabase
 from app.ml.agent.orchestrator import orchestrator
+from app.ml.agent.executors import SiteBlockExecutor
 from datetime import datetime, timedelta
 import re
 
@@ -53,13 +54,24 @@ def _strip_emoji(text: str) -> str:
     return _EMOJI_RE.sub('', text).strip()
 
 
-def _normalize_notification(notification: dict) -> dict:
+def _normalize_notification(notification: dict, block_state: dict | None = None) -> dict:
     normalized = dict(notification)
     title = _strip_emoji(normalized.get('title', ''))
     message = _strip_emoji(normalized.get('message', ''))
 
     if title.lower() == 'procrastination detected':
         title = 'Focus Reminder'
+
+    if normalized.get('type') == 'site_block' and not normalized.get('extra_data'):
+        normalized['extra_data'] = {
+            'command': 'block_sites',
+            'domains': (block_state or {}).get('blocked_domains', []),
+            'duration_minutes': None,
+            'unblock_at': (block_state or {}).get('unblock_at'),
+        }
+
+    if normalized.get('type') == 'site_unblock' and not normalized.get('extra_data'):
+        normalized['extra_data'] = {'command': 'unblock_sites'}
 
     normalized['title'] = title
     normalized['message'] = message
@@ -128,7 +140,12 @@ def trigger_cycle(user_id: str = Depends(get_current_user_id)):
 def pause_agent(user_id: str = Depends(get_current_user_id)):
     """Pause the agent for this user."""
     orchestrator.pause_agent(user_id)
-    return {'message': 'Agent paused', 'state': 'paused'}
+    SiteBlockExecutor(user_id).unblock()
+    return {
+        'message': 'Agent paused and active site blocks cleared',
+        'state': 'paused',
+        'block_cleared': True,
+    }
 
 
 @router.post("/resume")
@@ -187,24 +204,49 @@ def get_interventions(
 @router.get("/notifications")
 def get_notifications(
     unread_only: bool = True,
+    limit: int = 50,
     user_id: str = Depends(get_current_user_id),
 ):
     """Get pending notifications for the user."""
     supabase = get_supabase()
+
+    safe_limit = max(1, min(limit, 200))
 
     query = (
         supabase.table('notification_queue')
         .select("*")
         .eq('user_id', user_id)
         .order('created_at', desc=True)
-        .limit(10)
+        .limit(safe_limit)
     )
 
     if unread_only:
         query = query.eq('read', False)
 
     result = query.execute()
-    notifications = [_normalize_notification(n) for n in (result.data or [])]
+    raw_notifications = result.data or []
+
+    needs_block_state = any(
+        n.get('type') == 'site_block' and not n.get('extra_data')
+        for n in raw_notifications
+    )
+
+    block_state = {}
+    if needs_block_state:
+        block_state_result = (
+            supabase.table('site_block_state')
+            .select('blocked_domains, unblock_at')
+            .eq('user_id', user_id)
+            .limit(1)
+            .execute()
+        )
+        if block_state_result.data:
+            block_state = block_state_result.data[0]
+
+    notifications = [
+        _normalize_notification(n, block_state=block_state)
+        for n in raw_notifications
+    ]
 
     return {
         'notifications': notifications,

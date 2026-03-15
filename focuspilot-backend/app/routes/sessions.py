@@ -12,6 +12,10 @@ router = APIRouter(prefix="/sessions", tags=["Sessions"])
 security = HTTPBearer()
 
 
+def normalize_domain(value: str) -> str:
+    return (value or '').strip().lower().replace('www.', '')
+
+
 def run_db(operation, failure_message: str):
     try:
         return execute_with_retries(operation)
@@ -288,13 +292,15 @@ def log_activity(
     if is_whitelisted_domain(activity.domain):
         return {"message": "Activity ignored (whitelisted domain)", "ignored": True}
 
+    normalized_domain = normalize_domain(activity.domain)
+
     # Log activity
     run_db(
         lambda supabase: supabase.table('browsing_activity').insert({
             'session_id': session_id,
             'user_id': user_id,
             'url': activity.url,
-            'domain': activity.domain,
+            'domain': normalized_domain,
             'duration_seconds': activity.duration_seconds
         }).execute(),
         "Database unavailable while logging activity"

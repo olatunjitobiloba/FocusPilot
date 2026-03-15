@@ -70,7 +70,9 @@ def get_distraction_analysis(
     domain_stats = defaultdict(lambda: {'total_seconds': 0, 'visit_count': 0})
     
     for activity in activities:
-        domain = activity['domain']
+        domain = normalize_domain(activity.get('domain', ''))
+        if not domain:
+            continue
         duration = activity['duration_seconds'] or 0
         
         domain_stats[domain]['total_seconds'] += duration

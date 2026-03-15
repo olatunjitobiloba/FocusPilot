@@ -24,6 +24,34 @@ import os
 router = APIRouter(prefix="/predictions", tags=["Predictions"])
 
 
+def _risk_level_from_score(score: float) -> str:
+    if score >= 0.75:
+        return 'critical'
+    if score >= 0.60:
+        return 'high'
+    if score >= 0.40:
+        return 'medium'
+    return 'low'
+
+
+def _get_latest_agent_risk(user_id: str, supabase) -> float | None:
+    try:
+        result = (
+            supabase.table('agent_state')
+            .select('risk_score')
+            .eq('user_id', user_id)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            risk = result.data[0].get('risk_score')
+            if isinstance(risk, (int, float)):
+                return float(risk)
+    except Exception as exc:
+        print(f"WARNING Agent risk lookup error: {exc}")
+    return None
+
+
 # ── Train ──────────────────────────────────────────────────────────────
 
 @router.post("/train")
@@ -145,22 +173,29 @@ def get_current_risk(user_id: str = Depends(get_current_user_id)):
         will_procrastinate: True/False
         top_risk_factors: What's driving the risk
     """
+    supabase = get_supabase()
+    agent_risk = _get_latest_agent_risk(user_id, supabase)
+
     # Check if model exists
     if not model_manager.has_model(user_id):
+        fallback_risk = agent_risk if agent_risk is not None else 0.3
         return {
-            'risk_score':         0.3,
-            'risk_percentage':    30,
-            'risk_level':         'low',
-            'will_procrastinate': False,
+            'risk_score':         round(fallback_risk, 4),
+            'risk_percentage':    round(fallback_risk * 100),
+            'risk_level':         _risk_level_from_score(fallback_risk),
+            'will_procrastinate': fallback_risk >= 0.60,
             'model_available':    False,
-            'message':            'Train model first via POST /predictions/train'
+            'message':            (
+                'Using live agent risk (model not trained yet)'
+                if agent_risk is not None
+                else 'Train model first via POST /predictions/train'
+            )
         }
 
     # Build current feature row
     builder = DatasetBuilder(user_id=user_id, days_back=30)
 
     # Get current active session (if any)
-    supabase = get_supabase()
     active_result = (
         supabase.table('focus_sessions')
         .select("*")
@@ -200,6 +235,14 @@ def get_current_risk(user_id: str = Depends(get_current_user_id)):
 
     # Get prediction
     prediction = model_manager.predict(user_id, X)
+
+    if agent_risk is not None and agent_risk > prediction.get('risk_score', 0):
+        merged_risk = max(0.0, min(1.0, float(agent_risk)))
+        prediction['risk_score'] = round(merged_risk, 4)
+        prediction['risk_percentage'] = round(merged_risk * 100)
+        prediction['risk_level'] = _risk_level_from_score(merged_risk)
+        prediction['will_procrastinate'] = merged_risk >= 0.60
+        prediction['message'] = 'Live agent risk applied'
 
     # Get top risk factors
     top_factors = _get_top_risk_factors(user_id, current_session)
@@ -373,9 +416,21 @@ def _update_agent_risk_state(
 ):
     """Save current risk score to agent state and history."""
     try:
+        current_state = 'idle'
+        state_result = (
+            supabase.table('agent_state')
+            .select('state')
+            .eq('user_id', user_id)
+            .limit(1)
+            .execute()
+        )
+        if state_result.data and state_result.data[0].get('state'):
+            current_state = state_result.data[0]['state']
+
         # Update agent state
         upsert_agent_state({
             'user_id':    user_id,
+            'state':      current_state,
             'risk_score': risk_score,
             'last_cycle': datetime.utcnow().isoformat()
         })

@@ -89,7 +89,14 @@ class MonitoringAgent:
         # ── Step 4: Act if needed ──────────────────────────────────────
         actions_taken = []
 
-        if state_changed:
+        should_recheck_intervention = (
+            self.state_machine.current_state in [
+                AgentState.AT_RISK,
+                AgentState.INTERVENING
+            ]
+        )
+
+        if state_changed or should_recheck_intervention:
             action = self._act_on_state_change(
                 assessment,
                 observation
@@ -140,6 +147,24 @@ class MonitoringAgent:
         # If state matches recommendation, no change needed
         if current == recommended:
             return False
+
+        # Bridge IDLE -> ACTIVE before escalation, because direct
+        # IDLE -> AT_RISK/INTERVENING is not a valid transition.
+        if (
+            current == AgentState.IDLE
+            and recommended in [AgentState.AT_RISK, AgentState.INTERVENING]
+            and observation.get('active_session')
+        ):
+            activated = self.state_machine.transition(
+                AgentState.ACTIVE,
+                "Active session detected"
+            )
+            if not activated:
+                return False
+
+            current = self.state_machine.current_state
+            if current == recommended:
+                return True
 
         # Attempt transition
         reason = (

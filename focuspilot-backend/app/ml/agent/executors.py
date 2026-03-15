@@ -11,7 +11,7 @@ Each executor:
 Executors do NOT log. The ExecutionAgent handles logging.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 from app.database import get_supabase
 
@@ -35,6 +35,56 @@ class SiteBlockExecutor:
         self.user_id  = user_id
         self.supabase = get_supabase()
 
+    @staticmethod
+    def _is_missing_extra_data_column_error(error: Exception) -> bool:
+        error_text = str(error)
+        return (
+            'notification_queue' in error_text
+            and 'extra_data' in error_text
+            and 'Could not find' in error_text
+        )
+
+    def _insert_notification(self, payload: Dict[str, Any]) -> None:
+        """
+        Insert notification payload, retrying without extra_data for older DB schemas.
+        """
+        try:
+            self.supabase.table('notification_queue').insert(payload).execute()
+        except Exception as error:
+            if (
+                'extra_data' in payload
+                and self._is_missing_extra_data_column_error(error)
+            ):
+                fallback_payload = dict(payload)
+                fallback_payload.pop('extra_data', None)
+                self.supabase.table('notification_queue').insert(
+                    fallback_payload
+                ).execute()
+                return
+            raise
+
+    @staticmethod
+    def _is_duplicate_site_block_state_user_error(error: Exception) -> bool:
+        error_text = str(error)
+        return (
+            'duplicate key value violates unique constraint' in error_text
+            and 'site_block_state_user_id_key' in error_text
+        )
+
+    def _save_block_state(self, payload: Dict[str, Any]) -> None:
+        """
+        Persist state, tolerating legacy upsert behavior that ignores unique user_id.
+        """
+        try:
+            self.supabase.table('site_block_state').upsert(payload).execute()
+        except Exception as error:
+            if self._is_duplicate_site_block_state_user_error(error):
+                self.supabase.table('site_block_state').update(payload).eq(
+                    'user_id', self.user_id
+                ).execute()
+                return
+            raise
+
     def block(
         self,
         domains: List[str] = None,
@@ -51,32 +101,30 @@ class SiteBlockExecutor:
         4. Schedule auto-unblock
         """
         domains_to_block = domains or self.DEFAULT_BLOCK_DOMAINS
-        unblock_at       = (
-            datetime.utcnow() + timedelta(minutes=duration_minutes)
-        )
+        now_utc          = datetime.now(timezone.utc)
+        unblock_at       = now_utc + timedelta(minutes=duration_minutes)
 
         # ── Save block state ───────────────────────────────────────────
-        self.supabase.table('site_block_state').upsert({
+        self._save_block_state({
             'user_id':         self.user_id,
             'is_blocked':      True,
             'blocked_domains': domains_to_block,
-            'blocked_at':      datetime.utcnow().isoformat(),
+            'blocked_at':      now_utc.isoformat(),
             'unblock_at':      unblock_at.isoformat(),
             'block_reason':    reason
-        }).execute()
+        })
 
         # ── Push command to extension via notification queue ───────────
-        self.supabase.table('notification_queue').insert({
+        self._insert_notification({
             'user_id': self.user_id,
             'title':   '🔒 Focus Mode Activated',
             'message': (
                 f"Blocking {len(domains_to_block)} distraction sites "
-                f"for {duration_minutes} minutes. "
-                f"Unblocks at {unblock_at.strftime('%H:%M')}."
+                f"for {duration_minutes} minutes."
             ),
             'type':    'site_block',
             'read':    False,
-            'created_at': datetime.utcnow().isoformat(),
+            'created_at': now_utc.isoformat(),
             # Extra data for extension to read
             'extra_data': {
                 'command':          'block_sites',
@@ -84,7 +132,7 @@ class SiteBlockExecutor:
                 'duration_minutes': duration_minutes,
                 'unblock_at':       unblock_at.isoformat()
             }
-        }).execute()
+        })
 
         # ── Schedule auto-unblock ──────────────────────────────────────
         self.supabase.table('scheduled_actions').insert({
@@ -110,21 +158,21 @@ class SiteBlockExecutor:
     def unblock(self) -> Dict:
         """Remove all site blocks."""
         # Update block state
-        self.supabase.table('site_block_state').upsert({
+        self._save_block_state({
             'user_id':    self.user_id,
             'is_blocked': False,
             'blocked_domains': []
-        }).execute()
+        })
 
         # Push unblock command to extension
-        self.supabase.table('notification_queue').insert({
+        self._insert_notification({
             'user_id': self.user_id,
             'title':   '🔓 Sites Unblocked',
             'message': 'Focus mode ended. Sites are now accessible.',
             'type':    'site_unblock',
             'read':    False,
             'extra_data': {'command': 'unblock_sites'}
-        }).execute()
+        })
 
         print("   🔓 Sites unblocked")
 
@@ -153,9 +201,12 @@ class SiteBlockExecutor:
         if state.get('unblock_at'):
             unblock_at = datetime.fromisoformat(
                 state['unblock_at'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
+            )
 
-            if datetime.utcnow() >= unblock_at and state['is_blocked']:
+            if unblock_at.tzinfo is None:
+                unblock_at = unblock_at.replace(tzinfo=timezone.utc)
+
+            if datetime.now(timezone.utc) >= unblock_at and state['is_blocked']:
                 self.unblock()
                 state['is_blocked'] = False
 

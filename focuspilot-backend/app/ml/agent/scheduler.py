@@ -9,7 +9,7 @@ Executes them when their time comes.
 
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict
 from app.database import get_supabase
 
@@ -58,7 +58,7 @@ class ActionScheduler:
     def _execute_due_actions(self):
         """Find and execute all actions that are due."""
         supabase = get_supabase()
-        now      = datetime.utcnow().isoformat()
+        now      = datetime.now(timezone.utc).isoformat()
 
         # Get all pending actions that are due
         result = (
@@ -107,7 +107,7 @@ class ActionScheduler:
         # Mark as executed
         supabase.table('scheduled_actions').update({
             'status':      'executed',
-            'executed_at': datetime.utcnow().isoformat()
+            'executed_at': datetime.now(timezone.utc).isoformat()
         }).eq('id', action['id']).execute()
 
         print(f"   ✅ Executed scheduled: {action_type} for {user_id[:8]}")
