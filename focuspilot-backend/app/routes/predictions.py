@@ -113,6 +113,12 @@ def train_model_sync(user_id: str = Depends(get_current_user_id)):
             detail=f"Training failed: {exc}"
         )
 
+    if not result.get('success', False):
+        raise HTTPException(
+            status_code=422,
+            detail=result.get('message', 'Training failed')
+        )
+
     if result['success']:
         model_manager.invalidate(user_id)
 
