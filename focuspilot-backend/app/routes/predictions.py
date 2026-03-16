@@ -103,7 +103,15 @@ def train_model_sync(user_id: str = Depends(get_current_user_id)):
     Use this for testing. Use /train for production.
     """
     pipeline = TrainingPipeline(user_id=user_id)
-    result   = pipeline.run()
+
+    try:
+        result = pipeline.run()
+    except Exception as exc:
+        print(f"WARNING Training sync error for {user_id[:8]}: {exc}")
+        raise HTTPException(
+            status_code=422,
+            detail=f"Training failed: {exc}"
+        )
 
     if result['success']:
         model_manager.invalidate(user_id)

@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
 import math
+import re
 
 
 # ── Known distraction domains ──────────────────────────────────────────
@@ -326,10 +327,34 @@ class FeatureEngineer:
     # ── Utility ────────────────────────────────────────────────────────
 
     def _parse_dt(self, dt_string: str) -> datetime:
-        """Parse ISO datetime string safely."""
-        return datetime.fromisoformat(
-            dt_string.replace('Z', '+00:00')
-        ).replace(tzinfo=None)
+        """Parse datetime string safely across legacy timestamp formats."""
+        if dt_string is None:
+            raise ValueError("Datetime value is None")
+
+        value = str(dt_string).strip()
+        if not value:
+            raise ValueError("Datetime value is empty")
+
+        # Normalize common variants before parsing.
+        value = value.replace(' ', 'T', 1).replace('Z', '+00:00')
+
+        # Normalize fractional precision to max 6 digits for fromisoformat.
+        match = re.match(
+            r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?([+-]\d{2}:\d{2})?$",
+            value
+        )
+        if match:
+            base = match.group(1)
+            frac = match.group(2) or ""
+            tz = match.group(3) or ""
+
+            if frac:
+                frac = frac[:6]
+                value = f"{base}.{frac}{tz}"
+            else:
+                value = f"{base}{tz}"
+
+        return datetime.fromisoformat(value).replace(tzinfo=None)
 
     def get_feature_names(self) -> List[str]:
         """Return list of all feature names (for model explainability)."""
