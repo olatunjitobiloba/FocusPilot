@@ -14,6 +14,7 @@ from typing import Dict, Any
 from datetime import datetime
 from app.ml.model_manager  import model_manager
 from app.ml.dataset_builder import DatasetBuilder
+from app.database          import get_supabase  # Compatibility seam for tests.
 from app.ml.agent.states   import (
     AgentState,
     RISK_THRESHOLD_AT_RISK,

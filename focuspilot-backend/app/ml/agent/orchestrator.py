@@ -1,6 +1,6 @@
 # app/ml/agent/orchestrator.py
 """
-Agent Orchestrator — manages MonitoringAgent instances for all users.
+Agent Orchestrator — manages AgentPipeline instances for all users.
 
 One orchestrator runs per server instance.
 It maintains a pool of agents, one per active user.
@@ -12,7 +12,7 @@ import time
 from datetime import datetime
 from typing import Dict, Optional
 
-from app.ml.agent.monitor import MonitoringAgent
+from app.ml.agent.pipeline import AgentPipeline
 from app.database          import get_supabase
 
 
@@ -112,14 +112,14 @@ class AgentOrchestrator:
 
     # ── Agent management ───────────────────────────────────────────────
 
-    def _get_or_create_agent(self, user_id: str) -> MonitoringAgent:
-        """Get existing agent or create new one for user."""
+    def _get_or_create_agent(self, user_id: str) -> AgentPipeline:
+        """Get existing pipeline or create new one for user."""
         if user_id not in self._agents:
-            self._agents[user_id] = MonitoringAgent(user_id)
-            print(f"Created agent for user {user_id[:8]}")
+            self._agents[user_id] = AgentPipeline(user_id)
+            print(f"✅ Created pipeline for user {user_id[:8]}")
         return self._agents[user_id]
 
-    def get_agent(self, user_id: str) -> Optional[MonitoringAgent]:
+    def get_agent(self, user_id: str) -> Optional[AgentPipeline]:
         """Get agent for user (None if not active)."""
         return self._agents.get(user_id)
 
