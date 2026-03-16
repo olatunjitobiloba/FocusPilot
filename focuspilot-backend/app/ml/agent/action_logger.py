@@ -11,6 +11,7 @@ Every action is logged with:
 
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+import time
 from app.database import get_supabase
 from app.ml.agent.actions import get_action
 
@@ -35,25 +36,32 @@ class ActionLogger:
         action_def = get_action(action_type)
         is_undoable = action_def.is_undoable if action_def else False
 
-        result = (
-            self.supabase
-            .table('agent_actions')
-            .insert({
-                'user_id':              self.user_id,
-                'action_type':          action_type,
-                'action_data':          action_data,
-                'trigger_reason':       trigger_reason,
-                'risk_score_at_trigger': risk_score,
-                'status':               'executing',
-                'is_undoable':          is_undoable
-            })
-            .execute()
-        )
+        payload = {
+            'user_id':               self.user_id,
+            'action_type':           action_type,
+            'action_data':           action_data,
+            'trigger_reason':        trigger_reason,
+            'risk_score_at_trigger': risk_score,
+            'status':                'executing',
+            'is_undoable':           is_undoable
+        }
 
-        if result.data:
-            return result.data[0]['id']
-
-        return 'unknown'
+        for attempt in range(3):
+            try:
+                result = (
+                    self.supabase
+                    .table('agent_actions')
+                    .insert(payload)
+                    .execute()
+                )
+                if result.data:
+                    return result.data[0]['id']
+                return 'unknown'
+            except Exception as e:
+                if attempt == 2:
+                    print(f"WARNING Action log failed for {self.user_id[:8]}: {e}")
+                    return 'unknown'
+                time.sleep(0.3)
 
     def mark_completed(
         self,

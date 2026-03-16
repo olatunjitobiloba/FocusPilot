@@ -4,6 +4,7 @@ from app.auth import get_current_user_id
 from app.database import get_supabase, execute_with_retries
 from app.domain_whitelist import is_whitelisted_domain
 from datetime import datetime, timedelta, timezone
+import re
 
 router = APIRouter(prefix="/stats", tags=["Statistics"])
 
@@ -15,6 +16,42 @@ def normalize_domain(value: str) -> str:
     if domain.startswith('www.'):
         domain = domain[4:]
     return domain
+
+
+def safe_parse_datetime(value: str) -> datetime:
+    """Parse DB timestamps with tolerant fractional second handling."""
+    if value is None:
+        raise ValueError("Missing datetime value")
+
+    text = str(value).strip().strip("\"'")
+    if not text:
+        raise ValueError("Empty datetime value")
+
+    text = "".join(ch for ch in text if ch.isprintable())
+    text = text.replace('Z', '+00:00')
+
+    match = re.search(
+        r"(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:[+-]\d{2}:?\d{2})?",
+        text
+    )
+    if match:
+        fractional = match.group(7) or "0"
+        microsecond = int(fractional[:6].ljust(6, '0'))
+        return datetime(
+            int(match.group(1)),
+            int(match.group(2)),
+            int(match.group(3)),
+            int(match.group(4)),
+            int(match.group(5)),
+            int(match.group(6)),
+            microsecond,
+            tzinfo=timezone.utc
+        )
+
+    parsed = datetime.fromisoformat(text.replace(' ', 'T', 1))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 def get_productive_domains(supabase, user_id: str) -> set[str]:
@@ -64,12 +101,9 @@ def get_daily_stats(user_id: str = Depends(get_current_user_id)):
     if active_result.data:
         active_session = active_result.data[0]
         start_time_str = active_session['start_time']
-        
-        # Parse start_time (handles both with and without timezone)
-        if start_time_str.endswith('Z') or '+' in start_time_str or start_time_str.count('-') > 2:
-            start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
-        else:
-            start_time = datetime.fromisoformat(start_time_str).replace(tzinfo=timezone.utc)
+
+        # Parse start_time robustly across inconsistent DB timestamp formats.
+        start_time = safe_parse_datetime(start_time_str)
         
         # Calculate elapsed minutes
         now = datetime.now(timezone.utc)
