@@ -1,11 +1,11 @@
 {
-  "trained_at": "2026-03-14T21:44:53.496254",
-  "n_samples": 109,
+  "trained_at": "2026-03-16T09:20:09.859857",
+  "n_samples": 140,
   "n_features": 15,
   "n_estimators": 100,
   "label_balance": {
-    "procrastinated": 100,
-    "focused": 9
+    "procrastinated": 128,
+    "focused": 12
   },
   "feature_names": [
     "hour_of_day",
@@ -27,63 +27,68 @@
   "feature_importance": [
     {
       "feature": "day_of_week",
-      "importance": 0.3636,
-      "percentage": 36.36
+      "importance": 0.3276,
+      "percentage": 32.76
     },
     {
       "feature": "streak_days",
-      "importance": 0.3142,
-      "percentage": 31.42
+      "importance": 0.3087,
+      "percentage": 30.87
     },
     {
       "feature": "avg_focus_score_last3",
-      "importance": 0.0895,
-      "percentage": 8.95
+      "importance": 0.1011,
+      "percentage": 10.11
     },
     {
       "feature": "hour_of_day",
-      "importance": 0.0572,
-      "percentage": 5.72
-    },
-    {
-      "feature": "peak_distraction_mins",
-      "importance": 0.049,
-      "percentage": 4.9
+      "importance": 0.0797,
+      "percentage": 7.97
     },
     {
       "feature": "sessions_today",
-      "importance": 0.0463,
-      "percentage": 4.63
+      "importance": 0.0505,
+      "percentage": 5.05
     },
     {
       "feature": "is_night",
-      "importance": 0.0346,
-      "percentage": 3.46
+      "importance": 0.04,
+      "percentage": 4.0
+    },
+    {
+      "feature": "peak_distraction_mins",
+      "importance": 0.0386,
+      "percentage": 3.86
     },
     {
       "feature": "distraction_count",
-      "importance": 0.0175,
-      "percentage": 1.75
+      "importance": 0.0199,
+      "percentage": 1.99
     },
     {
       "feature": "days_since_last_session",
-      "importance": 0.0113,
-      "percentage": 1.13
+      "importance": 0.0156,
+      "percentage": 1.56
     },
     {
       "feature": "avg_duration_last7",
-      "importance": 0.0105,
-      "percentage": 1.05
+      "importance": 0.012,
+      "percentage": 1.2
     },
     {
       "feature": "same_hour_avg_score",
-      "importance": 0.0055,
-      "percentage": 0.55
+      "importance": 0.0059,
+      "percentage": 0.59
     },
     {
       "feature": "abandoned_early",
-      "importance": 0.0008,
-      "percentage": 0.08
+      "importance": 0.0002,
+      "percentage": 0.02
+    },
+    {
+      "feature": "distraction_ratio",
+      "importance": 0.0001,
+      "percentage": 0.01
     },
     {
       "feature": "is_weekend",
@@ -92,11 +97,6 @@
     },
     {
       "feature": "session_duration_mins",
-      "importance": 0.0,
-      "percentage": 0.0
-    },
-    {
-      "feature": "distraction_ratio",
       "importance": 0.0,
       "percentage": 0.0
     }
