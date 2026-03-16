@@ -11,6 +11,7 @@ Rules:
 
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
+import re
 from app.database import get_supabase
 
 
@@ -39,9 +40,7 @@ class CooldownManager:
 
         # ── Check: too soon since last intervention ────────────────────
         if recent:
-            last_time = datetime.fromisoformat(
-                recent[0]['created_at'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
+            last_time = self._parse_timestamp(recent[0].get('created_at'))
 
             elapsed = (datetime.utcnow() - last_time).total_seconds() / 60
 
@@ -60,9 +59,7 @@ class CooldownManager:
         one_hour_ago = datetime.utcnow() - timedelta(hours=1)
         hourly_count = sum(
             1 for r in recent
-            if datetime.fromisoformat(
-                r['created_at'].replace('Z', '+00:00')
-            ).replace(tzinfo=None) >= one_hour_ago
+            if self._parse_timestamp(r.get('created_at')) >= one_hour_ago
         )
 
         if hourly_count >= self.MAX_PER_HOUR:
@@ -78,9 +75,7 @@ class CooldownManager:
         )
         daily_count = sum(
             1 for r in recent
-            if datetime.fromisoformat(
-                r['created_at'].replace('Z', '+00:00')
-            ).replace(tzinfo=None) >= today_start
+            if self._parse_timestamp(r.get('created_at')) >= today_start
         )
 
         if daily_count >= self.MAX_PER_DAY:
@@ -132,3 +127,37 @@ class CooldownManager:
         )
 
         return result.data or []
+
+    def _parse_timestamp(self, value: Any) -> datetime:
+        """Parse intervention timestamp from DB with tolerant microsecond handling."""
+        if value is None:
+            return datetime.min
+
+        text = str(value).strip().strip("\"'")
+        if not text:
+            return datetime.min
+
+        text = "".join(ch for ch in text if ch.isprintable())
+        text = text.replace('Z', '+00:00')
+
+        match = re.search(
+            r"(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?",
+            text
+        )
+        if match:
+            fractional = match.group(7) or "0"
+            microsecond = int(fractional[:6].ljust(6, '0'))
+            return datetime(
+                int(match.group(1)),
+                int(match.group(2)),
+                int(match.group(3)),
+                int(match.group(4)),
+                int(match.group(5)),
+                int(match.group(6)),
+                microsecond
+            )
+
+        try:
+            return datetime.fromisoformat(text).replace(tzinfo=None)
+        except Exception:
+            return datetime.min
