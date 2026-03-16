@@ -342,34 +342,37 @@ class FeatureEngineer:
         if not value:
             raise ValueError("Datetime value is empty")
 
-        # Normalize common variants before parsing.
-        value = value.replace(' ', 'T', 1).replace('Z', '+00:00')
+        # Remove non-printable/control characters from DB payloads.
+        value = "".join(ch for ch in value if ch.isprintable())
+        value = value.replace('Z', '+00:00')
 
-        # Normalize fractional precision to max 6 digits for fromisoformat.
-        match = re.match(
-            r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?([+-]\d{2}:\d{2})?$",
+        # Parse tolerant datetime patterns and ignore timezone offset by design.
+        match = re.search(
+            r"(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:[+-]\d{2}:?\d{2})?",
             value
         )
         if match:
-            base = match.group(1)
-            frac = match.group(2) or ""
-            tz = match.group(3) or ""
+            year = int(match.group(1))
+            month = int(match.group(2))
+            day = int(match.group(3))
+            hour = int(match.group(4))
+            minute = int(match.group(5))
+            second = int(match.group(6))
+            fractional = match.group(7) or "0"
+            microsecond = int(fractional[:6].ljust(6, '0'))
 
-            if frac:
-                frac = frac[:6]
-                value = f"{base}.{frac}{tz}"
-            else:
-                value = f"{base}{tz}"
+            return datetime(
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second,
+                microsecond
+            )
 
-        # Fallback: extract parseable prefix if source stored extra suffix text.
-        fallback = re.match(
-            r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:[+-]\d{2}:\d{2})?)",
-            value
-        )
-        if fallback:
-            value = fallback.group(1)
-
-        return datetime.fromisoformat(value).replace(tzinfo=None)
+        # Last-chance parse for already-clean ISO values.
+        return datetime.fromisoformat(value.replace(' ', 'T', 1)).replace(tzinfo=None)
 
     def get_feature_names(self) -> List[str]:
         """Return list of all feature names (for model explainability)."""
