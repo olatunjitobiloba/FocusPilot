@@ -44,6 +44,7 @@ app.include_router(decisions.router)
 app.include_router(execution_router.router)
 app.include_router(pipeline_router.router)
 
+
 @app.on_event("startup")
 async def startup_event():
     orchestrator.start()
