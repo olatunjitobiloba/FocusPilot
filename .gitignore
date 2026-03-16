@@ -32,3 +32,14 @@ focuspilot-frontend/.vercel/
 # Extension packaging artifacts
 focuspilot-extension/dist/
 focuspilot-extension/*.zip
+
+# Mistakenly committed assets/models (keep local, never track)
+BUG_FIXES.md
+E2E_TEST_CHEKLIST
+E2E_TEST_CHEKLIST.md
+E2E_TEST_CHECKLIST.md
+Screenshot 2026-03-10 171228.png
+image-1.png
+image.png
+app/ml/scalers/
+focuspilot-backend/app/ml/scalers/
