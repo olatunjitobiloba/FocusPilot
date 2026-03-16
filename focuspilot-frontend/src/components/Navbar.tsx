@@ -49,6 +49,11 @@ function Navbar() {
       ? 'text-green-600 border-b-2 border-green-600'
       : 'text-gray-600 hover:text-gray-900';
 
+  const getAgentDashboardClass = () =>
+    location.pathname === '/agent-dashboard'
+      ? 'text-green-600 border-b-2 border-green-600'
+      : 'text-gray-600 hover:text-gray-900';
+
   const getExecutionClass = () =>
     location.pathname === '/execution'
       ? 'text-green-600 border-b-2 border-green-600'
@@ -94,6 +99,12 @@ function Navbar() {
               className={`font-medium text-sm pb-1 transition ${getAgentClass()}`}
             >
               Agent
+            </Link>
+            <Link
+              to="/agent-dashboard"
+              className={`font-medium text-sm pb-1 transition ${getAgentDashboardClass()}`}
+            >
+              🤖 Dashboard
             </Link>
             <Link
               to="/execution"

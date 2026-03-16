@@ -224,3 +224,14 @@ export const executionAPI = {
   sendNudge: (title: string, message: string) =>
     api.post('/execution/nudge', { title, message }),
 };
+
+export const pipelineAPI = {
+  getHealth: () =>
+    api.get('/pipeline/health'),
+
+  getSummary: () =>
+    api.get('/pipeline/summary'),
+
+  runNow: () =>
+    api.post('/pipeline/run'),
+};

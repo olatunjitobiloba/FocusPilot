@@ -6,6 +6,7 @@ import Signup    from './pages/Signup';
 import Login     from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import AgentStatus from './pages/AgentStatus';
+import AgentDashboard from './pages/AgentDashboard';
 import Blocklist from './pages/Blocklist';
 import Settings  from './pages/Settings';
 import ExecutionLog from './pages/ExecutionLog';
@@ -34,6 +35,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AgentStatus />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/agent-dashboard"
+          element={
+            <ProtectedRoute>
+              <AgentDashboard />
             </ProtectedRoute>
           }
         />
