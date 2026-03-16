@@ -15,6 +15,7 @@ Usage:
 
 from datetime import datetime
 from typing  import Dict, Any, Optional
+import re
 
 from app.ml.agent.observer        import Observer
 from app.ml.agent.assessor        import Assessor
@@ -216,6 +217,30 @@ class AgentPipeline:
             f"Risk={assessment['risk_score']:.3f}, "
             f"Level={assessment['risk_level']}"
         )
+
+        # Allow escalations from IDLE when a session exists by walking
+        # through valid intermediate states in one cycle.
+        if current == AgentState.IDLE and recommended in {
+            AgentState.AT_RISK,
+            AgentState.INTERVENING
+        }:
+            path = [AgentState.ACTIVE]
+            if recommended == AgentState.AT_RISK:
+                path.append(AgentState.AT_RISK)
+            else:
+                path.extend([
+                    AgentState.AT_RISK,
+                    AgentState.INTERVENING
+                ])
+
+            changed = False
+            for next_state in path:
+                changed = (
+                    self.state_machine.transition(next_state, reason)
+                    or changed
+                )
+            return changed
+
         return self.state_machine.transition(recommended, reason)
 
     # ── Persistence ────────────────────────────────────────────────────
@@ -230,13 +255,39 @@ class AgentPipeline:
         """Persist full cycle data to Supabase."""
         try:
             # ── Update agent_state ─────────────────────────────────────
-            self.supabase.table('agent_state').upsert({
+            agent_state_payload = {
                 'user_id':     self.user_id,
                 'state':       self.state_machine.current_state.value,
                 'risk_score':  assessment['risk_score'],
                 'last_cycle':  datetime.utcnow().isoformat(),
                 'cycle_count': self.cycle_count
-            }).execute()
+            }
+
+            while True:
+                try:
+                    self.supabase.table('agent_state').upsert(
+                        agent_state_payload
+                    ).execute()
+                    break
+                except Exception as e:
+                    error_msg = str(e)
+                    missing_column = re.search(
+                        r"Could not find the '([^']+)' column of 'agent_state'",
+                        error_msg
+                    )
+
+                    if not missing_column:
+                        raise
+
+                    missing_key = missing_column.group(1)
+                    if missing_key not in agent_state_payload:
+                        raise
+
+                    # Keep required fields and strip optional legacy-incompatible fields.
+                    if missing_key in {'user_id', 'state'}:
+                        raise
+
+                    agent_state_payload.pop(missing_key, None)
 
             # ── Log to agent_events ────────────────────────────────────
             event_data = {
