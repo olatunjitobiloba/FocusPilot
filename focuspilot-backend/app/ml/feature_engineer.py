@@ -61,38 +61,45 @@ class FeatureEngineer:
             # Get past sessions for historical features
             past_sessions = sessions[:i]  # All sessions before this one
 
-            # Build feature row
-            features = {}
+            try:
+                # Build feature row
+                features = {}
 
-            # ── Group 1: Temporal Features (4 features) ───────────────
-            features.update(
-                self._temporal_features(session)
-            )
+                # ── Group 1: Temporal Features (4 features) ───────────
+                features.update(
+                    self._temporal_features(session)
+                )
 
-            # ── Group 2: Behavioral Features (5 features) ─────────────
-            features.update(
-                self._behavioral_features(session)
-            )
+                # ── Group 2: Behavioral Features (5 features) ─────────
+                features.update(
+                    self._behavioral_features(session)
+                )
 
-            # ── Group 3: Historical Features (4 features) ─────────────
-            features.update(
-                self._historical_features(session, past_sessions)
-            )
+                # ── Group 3: Historical Features (4 features) ─────────
+                features.update(
+                    self._historical_features(session, past_sessions)
+                )
 
-            # ── Group 4: Contextual Features (2 features) ─────────────
-            features.update(
-                self._contextual_features(session, past_sessions)
-            )
+                # ── Group 4: Contextual Features (2 features) ─────────
+                features.update(
+                    self._contextual_features(session, past_sessions)
+                )
 
-            # ── Label: Did the user procrastinate? ────────────────────
-            features['did_procrastinate'] = self._label(session)
+                # ── Label: Did the user procrastinate? ────────────────
+                features['did_procrastinate'] = self._label(session)
 
-            # ── Metadata (not used in training, kept for debugging) ────
-            features['_session_id']   = session['id']
-            features['_start_time']   = session['start_time']
-            features['_focus_score']  = session.get('focus_score')
+                # ── Metadata (not used in training, kept for debugging) ─
+                features['_session_id']   = session['id']
+                features['_start_time']   = session['start_time']
+                features['_focus_score']  = session.get('focus_score')
 
-            feature_rows.append(features)
+                feature_rows.append(features)
+            except Exception as e:
+                session_id = session.get('id', 'unknown')
+                print(
+                    f"WARNING Feature row skipped for session {session_id}: {e}"
+                )
+                continue
 
         return feature_rows
 
@@ -331,7 +338,7 @@ class FeatureEngineer:
         if dt_string is None:
             raise ValueError("Datetime value is None")
 
-        value = str(dt_string).strip()
+        value = str(dt_string).strip().strip("\"'")
         if not value:
             raise ValueError("Datetime value is empty")
 
@@ -353,6 +360,14 @@ class FeatureEngineer:
                 value = f"{base}.{frac}{tz}"
             else:
                 value = f"{base}{tz}"
+
+        # Fallback: extract parseable prefix if source stored extra suffix text.
+        fallback = re.match(
+            r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:[+-]\d{2}:\d{2})?)",
+            value
+        )
+        if fallback:
+            value = fallback.group(1)
 
         return datetime.fromisoformat(value).replace(tzinfo=None)
 
