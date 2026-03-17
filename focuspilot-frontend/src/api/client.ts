@@ -235,3 +235,17 @@ export const pipelineAPI = {
   runNow: () =>
     api.post('/pipeline/run'),
 };
+
+export const dnaAPI = {
+  train: () =>
+    api.post('/dna/train/sync'),
+
+  getResults: () =>
+    api.get('/dna/results'),
+
+  getInsights: () =>
+    api.get('/dna/insights'),
+
+  getClusters: () =>
+    api.get('/dna/clusters'),
+};

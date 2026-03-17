@@ -61,6 +61,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   }, []);
 
   const completeCyclePlan = useCallback(() => {
+    console.log(`[Cycle Debug] Cycle plan completed`);
     setIsCyclePlanActive(false);
     setCompletedCycles(0);
     setTargetCycles(1);
@@ -68,6 +69,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   }, [stopBreakPhase]);
 
   const startBreakPhase = useCallback(() => {
+    console.log(`[Cycle Debug] Break phase started`);
     isBreakRunningRef.current = true;
     breakNotificationSentRef.current = false;
     setIsBreakRunning(true);
@@ -470,6 +472,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setHasActiveSessionConflict(false);
       autoEndingRef.current = false;
       notifyExtension('startSession', session.id, session.start_time, durations.sessionDurationMins);
+      console.log(`[Cycle Debug] Focus session started (ID: ${session.id})`);
       return true;
     } catch (err: any) {
       setIsRunning(previousState.isRunning);
@@ -522,6 +525,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     setTargetCycles(cycles);
     setCompletedCycles(0);
     setIsCyclePlanActive(true);
+    console.log(`[Cycle Debug] Starting cycle plan with ${cycles} cycles`);
 
     const started = await startFocusSession();
     if (!started) {
@@ -564,12 +568,16 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
           return nextCompleted;
         });
 
+        console.log(`[Cycle Debug] Focus session ended. Completed: ${nextCompleted}, Target: ${targetCycles}`);
         if (nextCompleted < targetCycles) {
+          console.log(`[Cycle Debug] Starting break phase (${nextCompleted}/${targetCycles})`);
           startBreakPhase();
         } else {
+          console.log(`[Cycle Debug] All cycles completed. Ending cycle plan.`);
           completeCyclePlan();
         }
       } else {
+        console.log(`[Cycle Debug] Manual end or cycle plan inactive. Ending.`);
         completeCyclePlan();
       }
     } catch (err: any) {
@@ -606,6 +614,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   };
 
   const startNextFocusAfterBreak = useCallback(async () => {
+    console.log(`[Cycle Debug] Break ended. Starting next focus session.`);
     stopBreakPhase();
     notifyExtension('notifyBreakEnded');
     const started = await startFocusSession();
@@ -619,6 +628,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     if (elapsed < sessionDurationMins * 60) return;
     if (autoEndingRef.current) return;
 
+    console.log(`[Cycle Debug] Focus session duration (${sessionDurationMins} min) reached. Auto-ending...`);
     autoEndingRef.current = true;
     handleEnd(true);
   }, [elapsed, handleEnd, isRunning, loading, sessionDurationMins, sessionId]);
@@ -627,6 +637,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     if (!isBreakRunning || !isCyclePlanActive || loading) return;
     if (breakElapsed < breakDurationMins * 60) return;
 
+    console.log(`[Cycle Debug] Break duration (${breakDurationMins} min) reached. Auto-ending break...`);
     void startNextFocusAfterBreak();
   }, [breakDurationMins, breakElapsed, isBreakRunning, isCyclePlanActive, loading, startNextFocusAfterBreak]);
 
@@ -634,6 +645,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     if (!isBreakRunning || !isCyclePlanActive) return;
     if (breakNotificationSentRef.current) return;
 
+    console.log(`[Cycle Debug] Break started - sending notification`);
     breakNotificationSentRef.current = true;
     notifyExtension('notifyBreakStarted');
   }, [isBreakRunning, isCyclePlanActive, notifyExtension]);
