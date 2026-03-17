@@ -22,6 +22,9 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Cache unsupported agent_state columns discovered at runtime.
+_agent_state_unsupported_columns: set[str] = set()
+
 
 def _is_transient_db_error(exc: Exception) -> bool:
     message = str(exc).lower()
@@ -76,6 +79,11 @@ def execute_with_retries(operation, retries: int = 3, base_delay_seconds: float 
                 f"{type(exc).__name__}: {exc}"
             )
 
+            # Schema mismatches (PGRST204) are permanent — never retry.
+            if _is_schema_mismatch_error(exc):
+                print("[DB] Schema error (PGRST204) — not retrying")
+                raise
+
             is_http2_error = any(marker in error_str for marker in [
                 'protocol_error',
                 'connectionterminated',
@@ -116,6 +124,16 @@ def safe_query(operation, fallback=None):
         return fallback if fallback is not None else []
 
 
+def _is_schema_mismatch_error(exc: Exception) -> bool:
+    """PGRST204 = column not found in schema cache. Never transient — don't retry."""
+    msg = str(exc)
+    return (
+        'PGRST204' in msg
+        or ('Could not find' in msg and 'column' in msg)
+        or 'schema cache' in msg
+    )
+
+
 def _extract_unknown_column_name(exc: Exception) -> str | None:
     message = str(exc)
     match = re.search(r"Could not find the '([^']+)' column", message)
@@ -143,6 +161,18 @@ def normalize_agent_state_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     if normalized.get('state') in (None, ''):
         normalized['state'] = 'idle'
 
+    # Keep only columns that exist in the agent_state table schema.
+    allowed_columns = {
+        'user_id', 'state', 'risk_score',
+        'last_cycle', 'cycle_count',
+        'last_action', 'last_assessed', 'updated_at',
+    }
+    normalized = {k: v for k, v in normalized.items() if k in allowed_columns}
+
+    # Also drop any columns runtime-detected as unsupported in this deployment.
+    for column in list(_agent_state_unsupported_columns):
+        normalized.pop(column, None)
+
     return normalized
 
 
@@ -158,4 +188,5 @@ def upsert_agent_state(payload: Dict[str, Any]):
             unknown_column = _extract_unknown_column_name(exc)
             if not unknown_column or unknown_column not in normalized_payload:
                 raise
+            _agent_state_unsupported_columns.add(unknown_column)
             normalized_payload.pop(unknown_column, None)

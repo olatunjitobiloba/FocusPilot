@@ -81,3 +81,41 @@ def test_upsert_agent_state_retries_without_unknown_column(monkeypatch):
             'risk_score': 0.61,
         },
     ]
+
+
+def test_upsert_agent_state_caches_unsupported_columns(monkeypatch):
+    fake_client = _FakeClient(fail_once=True)
+
+    def fake_execute_with_retries(operation, retries=2, base_delay_seconds=0.12):
+        return operation(fake_client)
+
+    monkeypatch.setattr('app.database.execute_with_retries', fake_execute_with_retries)
+    monkeypatch.setattr('app.database._agent_state_unsupported_columns', set())
+
+    upsert_agent_state({
+        'user_id': 'u1',
+        'state': 'active',
+        'risk_score': 0.61,
+        'cycle_count': 7,
+    })
+
+    # First call fails once, then succeeds without unsupported column.
+    assert len(fake_client.seen_payloads) == 2
+
+    fake_client.seen_payloads.clear()
+
+    upsert_agent_state({
+        'user_id': 'u1',
+        'state': 'active',
+        'risk_score': 0.62,
+        'cycle_count': 8,
+    })
+
+    # Second call should skip unsupported column immediately.
+    assert fake_client.seen_payloads == [
+        {
+            'user_id': 'u1',
+            'state': 'active',
+            'risk_score': 0.62,
+        }
+    ]
