@@ -119,7 +119,7 @@ function Navbar() {
               to="/execution"
               className={`font-medium text-sm pb-1 transition ${getExecutionClass()}`}
             >
-              ⚡ Actions
+              Actions
             </Link>
           </div>
 
