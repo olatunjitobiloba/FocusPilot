@@ -20,6 +20,7 @@ from typing import Dict, List
 from datetime import datetime
 import json
 import os
+import threading
 
 router = APIRouter(prefix="/predictions", tags=["Predictions"])
 
@@ -50,6 +51,36 @@ def _get_latest_agent_risk(user_id: str, supabase) -> float | None:
     except Exception as exc:
         print(f"WARNING Agent risk lookup error: {exc}")
     return None
+
+
+def _start_auto_retrain(user_id: str):
+    """
+    Fire-and-forget retraining after model artifact incompatibility is detected.
+    """
+    if model_manager.is_retraining(user_id):
+        return
+
+    model_manager.mark_retraining_started(user_id)
+
+    def _run():
+        try:
+            pipeline = TrainingPipeline(user_id=user_id)
+            result = pipeline.run()
+            if result.get('success'):
+                model_manager.invalidate(user_id)
+                print(f"Auto-retrain complete for {user_id[:8]}")
+            else:
+                print(
+                    f"WARNING Auto-retrain failed for {user_id[:8]}: "
+                    f"{result.get('message')}"
+                )
+        except Exception as exc:
+            print(f"WARNING Auto-retrain error for {user_id[:8]}: {exc}")
+        finally:
+            model_manager.mark_retraining_finished(user_id)
+
+    worker = threading.Thread(target=_run, daemon=True)
+    worker.start()
 
 
 # ── Train ──────────────────────────────────────────────────────────────
@@ -249,6 +280,25 @@ def get_current_risk(user_id: str = Depends(get_current_user_id)):
 
     # Get prediction
     prediction = model_manager.predict(user_id, X)
+
+    if prediction.get('retrain_required'):
+        _start_auto_retrain(user_id)
+        fallback_risk = agent_risk if agent_risk is not None else 0.3
+        return {
+            'risk_score':         round(fallback_risk, 4),
+            'risk_percentage':    round(fallback_risk * 100),
+            'risk_level':         _risk_level_from_score(fallback_risk),
+            'will_procrastinate': fallback_risk >= 0.60,
+            'model_available':    False,
+            'model_refreshing':   True,
+            'fallback_source':    (
+                'agent_state' if agent_risk is not None else 'static_default'
+            ),
+            'message':            (
+                'Model artifact was incompatible and auto-retraining has started. '
+                'Using live agent risk until retraining completes.'
+            )
+        }
 
     if agent_risk is not None and agent_risk > prediction.get('risk_score', 0):
         merged_risk = max(0.0, min(1.0, float(agent_risk)))

@@ -5,7 +5,7 @@ Agent endpoints - control and monitor the agent.
 
 from fastapi import APIRouter, Depends, BackgroundTasks
 from app.auth import get_current_user_id
-from app.database import get_supabase
+from app.database import get_supabase, execute_with_retries
 from app.ml.agent.orchestrator import orchestrator
 from app.ml.agent.executors import SiteBlockExecutor
 from datetime import datetime, timedelta
@@ -223,7 +223,7 @@ def get_notifications(
     if unread_only:
         query = query.eq('read', False)
 
-    result = query.execute()
+    result = execute_with_retries(lambda _client: query.execute())
     raw_notifications = result.data or []
 
     needs_block_state = any(
@@ -233,12 +233,14 @@ def get_notifications(
 
     block_state = {}
     if needs_block_state:
-        block_state_result = (
-            supabase.table('site_block_state')
-            .select('blocked_domains, unblock_at')
-            .eq('user_id', user_id)
-            .limit(1)
-            .execute()
+        block_state_result = execute_with_retries(
+            lambda client: (
+                client.table('site_block_state')
+                .select('blocked_domains, unblock_at')
+                .eq('user_id', user_id)
+                .limit(1)
+                .execute()
+            )
         )
         if block_state_result.data:
             block_state = block_state_result.data[0]

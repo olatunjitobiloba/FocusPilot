@@ -13,11 +13,34 @@ It collects:
 
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
+import re
+from dateutil.parser import isoparse
 from app.database import get_supabase
 
 
 def _normalize_domain(value: str) -> str:
     return (value or '').strip().lower().replace('www.', '')
+
+
+def _parse_datetime(value: Any) -> datetime:
+    """Parse DB timestamps with tolerance for legacy fractional precision."""
+    text = str(value or '').strip()
+    if not text:
+        raise ValueError('Empty datetime value')
+
+    text = text.replace(' ', 'T', 1).replace('Z', '+00:00')
+    normalized = re.sub(
+        r"\.(\d{6})\d+(?=([+-]\d{2}:\d{2})?$)",
+        r".\1",
+        text
+    )
+
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        dt = isoparse(normalized)
+
+    return dt.replace(tzinfo=None)
 
 
 class Observer:
@@ -115,9 +138,7 @@ class Observer:
         from app.ml.feature_engineer import DISTRACTION_DOMAINS
 
         # Session elapsed time
-        start_time = datetime.fromisoformat(
-            session['start_time'].replace('Z', '+00:00')
-        ).replace(tzinfo=None)
+        start_time = _parse_datetime(session['start_time'])
         elapsed_minutes = (
             datetime.utcnow() - start_time
         ).total_seconds() / 60

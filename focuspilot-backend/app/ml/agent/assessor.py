@@ -169,6 +169,8 @@ class Assessor:
             X = builder.build_inference_row(session)
 
             prediction = model_manager.predict(self.user_id, X)
+            if not prediction.get('model_available', False):
+                return None
             return prediction.get('risk_score')
 
         except Exception as e:
