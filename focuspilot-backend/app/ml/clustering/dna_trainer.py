@@ -117,7 +117,7 @@ class DNATrainer:
         n_sessions: int
     ):
         """Save DNA results to productivity_clusters table."""
-        self.supabase.table('productivity_clusters').upsert({
+        payload = {
             'user_id':            self.user_id,
             'n_clusters':         k,
             'cluster_profiles':   profiles,
@@ -128,7 +128,37 @@ class DNATrainer:
             'insights':           insight_data['insights'],
             'trained_at':         datetime.utcnow().isoformat(),
             'sessions_analyzed':  n_sessions
-        }).execute()
+        }
+
+        try:
+            self.supabase.table('productivity_clusters').upsert(
+                payload,
+                on_conflict='user_id'
+            ).execute()
+            return
+        except Exception as e:
+            if not self._is_on_conflict_error(e):
+                raise
+
+        existing = (
+            self.supabase
+            .table('productivity_clusters')
+            .select('id')
+            .eq('user_id', self.user_id)
+            .limit(1)
+            .execute()
+        )
+
+        if existing.data:
+            (
+                self.supabase
+                .table('productivity_clusters')
+                .update(payload)
+                .eq('user_id', self.user_id)
+                .execute()
+            )
+        else:
+            self.supabase.table('productivity_clusters').insert(payload).execute()
 
     def _save_session_assignments(
         self,
@@ -153,10 +183,34 @@ class DNATrainer:
         # Upsert in batches of 50
         for i in range(0, len(rows), 50):
             batch = rows[i:i+50]
-            self.supabase.table('session_clusters').upsert(
-                batch,
-                on_conflict='user_id,session_id'
-            ).execute()
+            try:
+                self.supabase.table('session_clusters').upsert(
+                    batch,
+                    on_conflict='user_id,session_id'
+                ).execute()
+            except Exception as e:
+                if not self._is_on_conflict_error(e):
+                    raise
+
+                session_ids = [row['session_id'] for row in batch]
+                (
+                    self.supabase
+                    .table('session_clusters')
+                    .delete()
+                    .eq('user_id', self.user_id)
+                    .in_('session_id', session_ids)
+                    .execute()
+                )
+                self.supabase.table('session_clusters').insert(batch).execute()
+
+    def _is_on_conflict_error(self, error: Exception) -> bool:
+        """Detect Postgres upsert target errors (SQLSTATE 42P10)."""
+        text = str(error)
+        lowered = text.lower()
+        return (
+            '42p10' in lowered or
+            'no unique or exclusion constraint matching the on conflict specification' in lowered
+        )
 
     def get_existing_dna(self) -> Dict | None:
         """Get previously trained DNA (no retraining)."""

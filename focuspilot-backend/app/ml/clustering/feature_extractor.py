@@ -25,7 +25,9 @@ Features per session:
 
 import numpy as np
 from datetime import datetime
+import re
 from typing import Dict, List, Tuple, Optional
+from dateutil.parser import isoparse
 from app.database import get_supabase
 
 
@@ -127,13 +129,8 @@ class SessionFeatureExtractor:
         """Extract feature vector for one session."""
 
         # ── Parse times ────────────────────────────────────────────────
-        start_time = datetime.fromisoformat(
-            session['start_time'].replace('Z', '+00:00')
-        ).replace(tzinfo=None)
-
-        end_time = datetime.fromisoformat(
-            session['end_time'].replace('Z', '+00:00')
-        ).replace(tzinfo=None)
+        start_time = self._parse_datetime(session['start_time'])
+        end_time = self._parse_datetime(session['end_time'])
 
         # ── Time features ──────────────────────────────────────────────
         hour_of_day  = start_time.hour
@@ -228,6 +225,35 @@ class SessionFeatureExtractor:
             float(is_weekend),
             float(session_length_bucket)
         ]
+
+    def _parse_datetime(self, value: str) -> datetime:
+        """
+        Parse timestamps from DB rows with tolerance for legacy formats.
+
+        Handles:
+        - trailing Z timezone marker
+        - space separator instead of 'T'
+        - fractional seconds longer than 6 digits
+        """
+        text = str(value or '').strip()
+        if not text:
+            raise ValueError('Empty datetime value')
+
+        text = text.replace(' ', 'T', 1).replace('Z', '+00:00')
+
+        # Normalize overly precise fractional seconds for fromisoformat.
+        normalized = re.sub(
+            r"\.(\d{6})\d+(?=([+-]\d{2}:\d{2})?$)",
+            r".\1",
+            text
+        )
+
+        try:
+            dt = datetime.fromisoformat(normalized)
+        except ValueError:
+            dt = isoparse(normalized)
+
+        return dt.replace(tzinfo=None)
 
     def _load_session_activity(
         self,
