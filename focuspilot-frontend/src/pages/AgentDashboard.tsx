@@ -29,6 +29,21 @@ const STATUS_COLORS: Record<string, string> = {
   degraded: 'bg-orange-100 text-orange-700 border-orange-200'
 };
 
+const getAgentStateLabel = (agentState: unknown): string => {
+  if (typeof agentState === 'string' && agentState.trim()) {
+    return agentState;
+  }
+
+  if (agentState && typeof agentState === 'object') {
+    const status = (agentState as { status?: unknown }).status;
+    if (typeof status === 'string' && status.trim()) {
+      return status;
+    }
+  }
+
+  return 'unknown';
+};
+
 function AgentDashboard() {
   const [health, setHealth] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
@@ -118,6 +133,7 @@ function AgentDashboard() {
   const components = health && typeof health.components === 'object' && health.components
     ? health.components
     : {};
+  const agentStateLabel = getAgentStateLabel(health?.agent_state);
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -171,7 +187,7 @@ function AgentDashboard() {
                 health?.overall_status === 'healthy' ? 'text-green-600' : 'text-orange-600'
               }`}
             >
-              Agent state: <strong>{health?.agent_state}</strong>
+              Agent state: <strong>{agentStateLabel}</strong>
               {health?.last_risk_score != null &&
                 `  Last risk: ${Math.round(health.last_risk_score * 100)}%`}
               {health?.last_cycle &&
