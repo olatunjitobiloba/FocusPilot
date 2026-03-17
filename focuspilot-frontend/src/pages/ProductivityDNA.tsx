@@ -144,8 +144,8 @@ function ProductivityDNA() {
                 Focus Quality Heatmap
               </h2>
               <div className="bg-white rounded-xl shadow p-6">
-                <p className="text-sm text-gray-500 mb-4">
-                  Darker = better focus quality at that hour and day
+                <p className="text-sm text-gray-600 mb-4">
+                  Darker blue = better focus quality. Gray cells mean no sessions logged for that slot.
                 </p>
                 <FocusHeatmap heatmapData={dna.heatmap_data || []} />
               </div>
@@ -160,9 +160,17 @@ function ProductivityDNA() {
                   Personalized Insights
                 </h2>
                 <div className="space-y-3">
-                  {(dna.insights || []).map((insight, i) => (
-                    <InsightCard key={i} insight={insight} />
-                  ))}
+                  {(dna.insights || []).length === 0 ? (
+                    <div className="rounded-xl border border-gray-200 bg-white p-4">
+                      <p className="text-sm font-medium text-gray-700">
+                        Not enough data yet for personalized insights.
+                      </p>
+                    </div>
+                  ) : (
+                    (dna.insights || []).map((insight, i) => (
+                      <InsightCard key={i} insight={insight} />
+                    ))
+                  )}
                 </div>
               </section>
 
@@ -359,16 +367,42 @@ function FocusHeatmap({ heatmapData }: { heatmapData: HeatmapCell[] }) {
     };
   });
 
-  const getColor = (quality: number | undefined) => {
-    if (quality === undefined) return '#f9fafb';
-    if (quality >= 75) return '#4f46e5';
-    if (quality >= 55) return '#818cf8';
-    if (quality >= 35) return '#c7d2fe';
-    return '#e0e7ff';
+  const totalSlots = HOURS.length * DAYS.length;
+  const filledSlots = Object.keys(lookup).length;
+  const coveragePct = Math.round((filledSlots / totalSlots) * 100);
+  const totalSessions = Object.values(lookup).reduce((sum, c) => sum + c.count, 0);
+
+  const getCellTone = (quality: number | undefined) => {
+    if (quality === undefined) {
+      return {
+        backgroundColor: '#e5e7eb',
+        borderColor: '#d1d5db',
+        backgroundImage: 'linear-gradient(135deg, rgba(148,163,184,0.18) 25%, transparent 25%, transparent 50%, rgba(148,163,184,0.18) 50%, rgba(148,163,184,0.18) 75%, transparent 75%, transparent)',
+        backgroundSize: '8px 8px'
+      };
+    }
+
+    if (quality >= 75) {
+      return { backgroundColor: '#3730a3', borderColor: '#312e81' };
+    }
+    if (quality >= 55) {
+      return { backgroundColor: '#4f46e5', borderColor: '#4338ca' };
+    }
+    if (quality >= 35) {
+      return { backgroundColor: '#818cf8', borderColor: '#6366f1' };
+    }
+
+    return { backgroundColor: '#c7d2fe', borderColor: '#a5b4fc' };
   };
 
   return (
     <div className="overflow-x-auto">
+      <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+        Heatmap coverage: <span className="font-semibold">{filledSlots}/{totalSlots}</span> slots ({coveragePct}%)
+        {' · '}
+        Sessions represented: <span className="font-semibold">{totalSessions}</span>
+      </div>
+
       <table className="w-full text-xs">
         <thead>
           <tr>
@@ -396,13 +430,14 @@ function FocusHeatmap({ heatmapData }: { heatmapData: HeatmapCell[] }) {
               </td>
               {DAYS.map((_, dayIdx) => {
                 const cell = lookup[`${hour}_${dayIdx}`];
+                const tone = getCellTone(cell?.quality);
                 return (
                   <td key={dayIdx} className="px-1 py-0.5">
                     <div
-                      className="w-full h-6 rounded cursor-pointer
-                        transition-opacity hover:opacity-80"
+                      className="w-full h-6 rounded border cursor-pointer
+                        transition-opacity hover:opacity-85"
                       style={{
-                        backgroundColor: getColor(cell?.quality),
+                        ...tone,
                         minWidth: '28px'
                       }}
                       title={
@@ -421,15 +456,25 @@ function FocusHeatmap({ heatmapData }: { heatmapData: HeatmapCell[] }) {
 
       {/* Legend */}
       <div className="flex items-center gap-3 mt-4 justify-end">
-        <span className="text-xs text-gray-400">Less focus</span>
-        {['#e0e7ff', '#c7d2fe', '#818cf8', '#4f46e5'].map((c, i) => (
+        <span className="text-xs text-gray-500">No data</span>
+        <div
+          className="w-5 h-5 rounded border"
+          style={{
+            backgroundColor: '#e5e7eb',
+            borderColor: '#d1d5db',
+            backgroundImage: 'linear-gradient(135deg, rgba(148,163,184,0.18) 25%, transparent 25%, transparent 50%, rgba(148,163,184,0.18) 50%, rgba(148,163,184,0.18) 75%, transparent 75%, transparent)',
+            backgroundSize: '8px 8px'
+          }}
+        />
+        <span className="text-xs text-gray-500">Less focus</span>
+        {['#c7d2fe', '#818cf8', '#4f46e5', '#3730a3'].map((c, i) => (
           <div
             key={i}
-            className="w-5 h-5 rounded"
-            style={{ backgroundColor: c }}
+            className="w-5 h-5 rounded border"
+            style={{ backgroundColor: c, borderColor: c }}
           />
         ))}
-        <span className="text-xs text-gray-400">More focus</span>
+        <span className="text-xs text-gray-500">More focus</span>
       </div>
     </div>
   );
@@ -449,10 +494,10 @@ function InsightCard({ insight }: { insight: DNAInsight }) {
       <div className="flex items-start gap-3">
         <span className="text-2xl shrink-0">{insight.icon}</span>
         <div>
-          <p className={`font-semibold text-sm ${c.text}`}>
+          <p className={`font-semibold text-base leading-tight ${c.text}`}>
             {insight.title}
           </p>
-          <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+          <p className="text-sm font-medium text-gray-700 mt-1.5 leading-relaxed">
             {insight.body}
           </p>
         </div>
