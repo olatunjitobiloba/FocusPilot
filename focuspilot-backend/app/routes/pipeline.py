@@ -14,6 +14,28 @@ from datetime import datetime
 router = APIRouter(prefix="/pipeline", tags=["Pipeline"])
 
 
+def _normalize_agent_state_record(agent_state: dict | None) -> dict:
+    normalized = dict(agent_state or {})
+    raw_state = normalized.get('state')
+
+    if isinstance(raw_state, dict):
+        risk_score = normalized.get('risk_score')
+        if risk_score is None:
+            risk_score = raw_state.get('current_risk')
+
+        last_cycle = normalized.get('last_cycle')
+        if not last_cycle:
+            last_cycle = raw_state.get('last_assessed')
+
+        normalized['state'] = raw_state.get('status', 'idle')
+        normalized['risk_score'] = risk_score
+        normalized['last_cycle'] = last_cycle
+    elif not isinstance(raw_state, str) or not raw_state:
+        normalized['state'] = 'idle'
+
+    return normalized
+
+
 def _degraded_health_payload(error_message: str | None = None):
     payload = {
         'overall_status': 'degraded',
@@ -102,7 +124,9 @@ def get_pipeline_health(user_id: str = Depends(get_current_user_id)):
             .eq('user_id', user_id)
             .execute()
         )
-        agent_state = state_result.data[0] if state_result.data else {}
+        agent_state = _normalize_agent_state_record(
+            state_result.data[0] if state_result.data else {}
+        )
 
         # 5. Recent cycles
         events_result = (
