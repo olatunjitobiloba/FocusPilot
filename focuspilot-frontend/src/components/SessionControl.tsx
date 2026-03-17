@@ -24,10 +24,18 @@ function parseSessionStartTimeToMillis(startTime: string): number {
 
 export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const [isRunning, setIsRunning] = useState(false);
+  const [isBreakRunning, setIsBreakRunning] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0); // seconds
+  const [breakElapsed, setBreakElapsed] = useState(0); // seconds
   const [sessionDurationMins, setSessionDurationMins] = useState(25);
+  const [breakDurationMins, setBreakDurationMins] = useState(5);
+  const [selectedCycles, setSelectedCycles] = useState(2);
+  const [targetCycles, setTargetCycles] = useState(1);
+  const [completedCycles, setCompletedCycles] = useState(0);
+  const [isCyclePlanActive, setIsCyclePlanActive] = useState(false);
   const [sessionStartTimeMs, setSessionStartTimeMs] = useState<number | null>(null);
+  const [breakStartTimeMs, setBreakStartTimeMs] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastAction, setLastAction] = useState<'start' | 'end' | null>(null);
   const [error, setError] = useState('');
@@ -35,20 +43,61 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const [showOrphanOptions, setShowOrphanOptions] = useState(false);
   const [hasActiveSessionConflict, setHasActiveSessionConflict] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const breakIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const autoEndingRef = useRef(false);
+  const isBreakRunningRef = useRef(false);
 
-  const loadSessionDuration = useCallback(async () => {
+  const clampCycles = (value: number) => {
+    if (!Number.isFinite(value)) return 1;
+    return Math.min(8, Math.max(1, Math.round(value)));
+  };
+
+  const stopBreakPhase = useCallback(() => {
+    isBreakRunningRef.current = false;
+    setIsBreakRunning(false);
+    setBreakElapsed(0);
+    setBreakStartTimeMs(null);
+  }, []);
+
+  const completeCyclePlan = useCallback(() => {
+    setIsCyclePlanActive(false);
+    setCompletedCycles(0);
+    setTargetCycles(1);
+    stopBreakPhase();
+  }, [stopBreakPhase]);
+
+  const startBreakPhase = useCallback(() => {
+    isBreakRunningRef.current = true;
+    setIsBreakRunning(true);
+    setBreakElapsed(0);
+    setBreakStartTimeMs(Date.now());
+  }, []);
+
+  const loadDurations = useCallback(async () => {
     try {
       const response = await settingsAPI.get();
-      const configuredDuration = Number(response.data?.session_duration_mins);
-      const safeDuration = Number.isFinite(configuredDuration) && configuredDuration > 0
-        ? configuredDuration
+      const configuredSessionDuration = Number(response.data?.session_duration_mins);
+      const configuredBreakDuration = Number(response.data?.break_duration_mins);
+      const safeSessionDuration = Number.isFinite(configuredSessionDuration) && configuredSessionDuration > 0
+        ? configuredSessionDuration
         : 25;
-      setSessionDurationMins(safeDuration);
-      return safeDuration;
+      const safeBreakDuration = Number.isFinite(configuredBreakDuration) && configuredBreakDuration > 0
+        ? configuredBreakDuration
+        : 5;
+
+      setSessionDurationMins(safeSessionDuration);
+      setBreakDurationMins(safeBreakDuration);
+      return {
+        sessionDurationMins: safeSessionDuration,
+        breakDurationMins: safeBreakDuration,
+      };
     } catch {
       setSessionDurationMins(25);
-      return 25;
+      setBreakDurationMins(5);
+      return {
+        sessionDurationMins: 25,
+        breakDurationMins: 5,
+      };
     }
   }, []);
 
@@ -97,7 +146,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   useEffect(() => {
     const checkForActiveSession = async () => {
       try {
-        await loadSessionDuration();
+        await loadDurations();
         await loadActiveSession();
       } catch (err) {
         setOrphanedSession(null);
@@ -107,7 +156,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     };
 
     checkForActiveSession();
-  }, [loadActiveSession, loadSessionDuration]);
+  }, [loadActiveSession, loadDurations]);
 
   // Listen for session events from extension (via postMessage)
   useEffect(() => {
@@ -127,6 +176,21 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
           setHasActiveSessionConflict(false);
           autoEndingRef.current = false;
           onSessionEnd();
+
+          if (isCyclePlanActive && !isBreakRunningRef.current) {
+            let nextCompleted = 0;
+            setCompletedCycles((prev) => {
+              nextCompleted = prev + 1;
+              return nextCompleted;
+            });
+
+            if (nextCompleted < targetCycles) {
+              startBreakPhase();
+            } else {
+              completeCyclePlan();
+            }
+          }
+
           setTimeout(() => {
             void loadActiveSession().catch(() => {
               // Ignore transient backend errors during post-end reconciliation.
@@ -147,7 +211,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
 
     window.addEventListener('message', handleExtensionMessage);
     return () => window.removeEventListener('message', handleExtensionMessage);
-  }, [loadActiveSession, onSessionEnd]);
+  }, [completeCyclePlan, isCyclePlanActive, loadActiveSession, onSessionEnd, startBreakPhase, targetCycles]);
 
   const notifyExtension = useCallback((
     action: 'startSession' | 'endSession',
@@ -184,6 +248,22 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [isRunning, sessionStartTimeMs, elapsed]);
+
+  // Break timer tick
+  useEffect(() => {
+    if (isBreakRunning) {
+      const startMs = breakStartTimeMs ?? (Date.now() - breakElapsed * 1000);
+      breakIntervalRef.current = setInterval(() => {
+        setBreakElapsed(Math.max(0, Math.floor((Date.now() - startMs) / 1000)));
+      }, 1000);
+    } else {
+      if (breakIntervalRef.current) clearInterval(breakIntervalRef.current);
+    }
+
+    return () => {
+      if (breakIntervalRef.current) clearInterval(breakIntervalRef.current);
+    };
+  }, [breakElapsed, breakStartTimeMs, isBreakRunning]);
 
   // Silent server resync every 10s while running (keeps parity with extension timer)
   useEffect(() => {
@@ -269,7 +349,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     setError('');
     try {
       const activeSession = orphanedSession ?? await getActiveSessionOrThrow();
-      const configuredDuration = await loadSessionDuration();
+      const durations = await loadDurations();
 
       const backendElapsedSeconds = typeof activeSession.elapsed_seconds === 'number'
         ? Math.max(0, activeSession.elapsed_seconds)
@@ -296,7 +376,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setOrphanedSession(activeSession);
       setShowOrphanOptions(false);
       setHasActiveSessionConflict(false);
-      notifyExtension('startSession', activeSession.id, activeSession.start_time, configuredDuration);
+      notifyExtension('startSession', activeSession.id, activeSession.start_time, durations.sessionDurationMins);
     } catch (err: any) {
       console.error('Error resuming session:', err);
       setError(err.response?.data?.detail || err.message || 'Failed to resume session');
@@ -348,7 +428,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     }
   };
 
-  const handleStart = async () => {
+  const startFocusSession = useCallback(async () => {
     const previousState = {
       isRunning,
       sessionId,
@@ -371,8 +451,8 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     setHasActiveSessionConflict(false);
 
     try {
-      const configuredDuration = await loadSessionDuration();
-      const res = await api.post('/sessions/start', { planned_duration: configuredDuration });
+      const durations = await loadDurations();
+      const res = await api.post('/sessions/start', { planned_duration: durations.sessionDurationMins });
       const session = res.data?.session;
       if (!session?.id) {
         throw new Error('Failed to start session');
@@ -387,7 +467,8 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       setShowOrphanOptions(false);
       setHasActiveSessionConflict(false);
       autoEndingRef.current = false;
-      notifyExtension('startSession', session.id, session.start_time, configuredDuration);
+      notifyExtension('startSession', session.id, session.start_time, durations.sessionDurationMins);
+      return true;
     } catch (err: any) {
       setIsRunning(previousState.isRunning);
       setSessionId(previousState.sessionId);
@@ -415,13 +496,38 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       } else {
         setError(detail);
       }
+      return false;
     } finally {
       setLoading(false);
       setLastAction(null);
     }
+  }, [
+    hasActiveSessionConflict,
+    isRunning,
+    loadActiveSession,
+    loadDurations,
+    notifyExtension,
+    orphanedSession,
+    sessionId,
+    sessionStartTimeMs,
+    showOrphanOptions,
+    elapsed,
+  ]);
+
+  const handleStart = async () => {
+    completeCyclePlan();
+    const cycles = clampCycles(selectedCycles);
+    setTargetCycles(cycles);
+    setCompletedCycles(0);
+    setIsCyclePlanActive(true);
+
+    const started = await startFocusSession();
+    if (!started) {
+      completeCyclePlan();
+    }
   };
 
-  const handleEnd = useCallback(async () => {
+  const handleEnd = useCallback(async (advanceCycle = false) => {
     const endingSessionId = sessionId;
     if (!endingSessionId) return;
 
@@ -448,6 +554,22 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       });
       notifyExtension('endSession', endingSessionId);
       onSessionEnd(); // refresh dashboard
+
+      if (advanceCycle && isCyclePlanActive) {
+        let nextCompleted = 0;
+        setCompletedCycles((prev) => {
+          nextCompleted = prev + 1;
+          return nextCompleted;
+        });
+
+        if (nextCompleted < targetCycles) {
+          startBreakPhase();
+        } else {
+          completeCyclePlan();
+        }
+      } else {
+        completeCyclePlan();
+      }
     } catch (err: any) {
       setIsRunning(true);
       setSessionId(endingSessionId);
@@ -463,7 +585,31 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
         // Avoid uncaught promise rejections when backend is temporarily unavailable.
       });
     }
-  }, [elapsed, loadActiveSession, notifyExtension, onSessionEnd, sessionId, sessionStartTimeMs]);
+  }, [
+    completeCyclePlan,
+    elapsed,
+    isCyclePlanActive,
+    loadActiveSession,
+    notifyExtension,
+    onSessionEnd,
+    sessionId,
+    sessionStartTimeMs,
+    startBreakPhase,
+    targetCycles,
+  ]);
+
+  const handleStopCyclePlan = () => {
+    completeCyclePlan();
+    setError('');
+  };
+
+  const startNextFocusAfterBreak = useCallback(async () => {
+    stopBreakPhase();
+    const started = await startFocusSession();
+    if (!started) {
+      completeCyclePlan();
+    }
+  }, [completeCyclePlan, startFocusSession, stopBreakPhase]);
 
   useEffect(() => {
     if (!isRunning || !sessionId || loading) return;
@@ -471,13 +617,28 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     if (autoEndingRef.current) return;
 
     autoEndingRef.current = true;
-    handleEnd();
+    handleEnd(true);
   }, [elapsed, handleEnd, isRunning, loading, sessionDurationMins, sessionId]);
+
+  useEffect(() => {
+    if (!isBreakRunning || !isCyclePlanActive || loading) return;
+    if (breakElapsed < breakDurationMins * 60) return;
+
+    void startNextFocusAfterBreak();
+  }, [breakDurationMins, breakElapsed, isBreakRunning, isCyclePlanActive, loading, startNextFocusAfterBreak]);
+
+  const displayedElapsed = isBreakRunning ? breakElapsed : elapsed;
+  const phaseLabel = isBreakRunning ? 'Break Time' : (isRunning ? 'Session Active' : 'Focus Session');
+  const phaseSubLabel = isBreakRunning
+    ? 'Blocked sites are temporarily unblocked.'
+    : (isRunning ? 'Stay focused. Agent is watching.' : 'Start a cycle plan to begin tracking');
 
   return (
     <div className={`rounded-2xl p-6 shadow-sm border-2 transition-all ${
       isRunning
         ? 'bg-green-50 border-green-300'
+        : isBreakRunning
+          ? 'bg-blue-50 border-blue-300'
         : 'bg-white border-gray-100'
     }`}>
 
@@ -485,13 +646,13 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-base font-bold text-gray-800">
-            {isRunning ? 'Session Active' : 'Focus Session'}
+            {phaseLabel}
           </h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            {isRunning ? 'Stay focused. Agent is watching.' : 'Start a session to begin tracking'}
+            {phaseSubLabel}
           </p>
         </div>
-        {isRunning && (
+        {(isRunning || isBreakRunning) && (
           <span className="flex items-center gap-1 text-xs bg-green-100 text-green-600 font-semibold px-3 py-1 rounded-full animate-pulse">
             ● LIVE
           </span>
@@ -533,16 +694,51 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
         isRunning ? 'bg-green-100' : 'bg-gray-50'
       }`}>
         <p className={`text-5xl font-mono font-bold tracking-widest ${
-          isRunning ? 'text-green-600' : 'text-gray-300'
+          isRunning ? 'text-green-600' : isBreakRunning ? 'text-blue-600' : 'text-gray-300'
         }`}>
-          {formatTime(elapsed)}
+          {formatTime(displayedElapsed)}
         </p>
-        {isRunning && (
-          <p className="text-xs text-green-500 mt-2">
-            {Math.floor(elapsed / 60)} minute{Math.floor(elapsed / 60) !== 1 ? 's' : ''} focused
+        {(isRunning || isBreakRunning) && (
+          <p className={`text-xs mt-2 ${isBreakRunning ? 'text-blue-500' : 'text-green-500'}`}>
+            {Math.floor(displayedElapsed / 60)} minute{Math.floor(displayedElapsed / 60) !== 1 ? 's' : ''}
+            {isBreakRunning ? ' on break' : ' focused'}
           </p>
         )}
       </div>
+
+      {/* Cycle Controls */}
+      {!isRunning && !isBreakRunning && (
+        <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <label htmlFor="cycle-count" className="block text-sm font-semibold text-gray-700 mb-2">
+            How many focus cycles do you want?
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              id="cycle-count"
+              type="number"
+              min={1}
+              max={8}
+              value={selectedCycles}
+              onChange={(e) => setSelectedCycles(clampCycles(Number(e.target.value)))}
+              className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+            <p className="text-xs text-gray-500">
+              1 cycle = {sessionDurationMins} min focus + {breakDurationMins} min break
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isCyclePlanActive && (
+        <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+          <p className="text-sm font-semibold text-indigo-700">
+            Cycle progress: {Math.min(completedCycles + (isRunning ? 1 : 0), targetCycles)} / {targetCycles}
+          </p>
+          <p className="text-xs text-indigo-600 mt-1">
+            {isBreakRunning ? 'Break in progress. Next focus session will start automatically.' : 'Focus is active. Break starts automatically when this session ends.'}
+          </p>
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -552,21 +748,31 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       )}
 
       {/* Action Button */}
-      {!isRunning ? (
+      {!isRunning && !isBreakRunning ? (
         <button
           onClick={handleStart}
           disabled={loading}
           className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-bold py-4 rounded-xl text-lg transition-all shadow-md hover:shadow-lg active:scale-95"
         >
-          {loading ? (lastAction === 'end' ? 'Ending...' : 'Starting...') : 'Start Focus Session'}
+          {loading ? (lastAction === 'end' ? 'Ending...' : 'Starting...') : `Start ${clampCycles(selectedCycles)} Focus Cycle${clampCycles(selectedCycles) > 1 ? 's' : ''}`}
         </button>
-      ) : (
+      ) : isRunning ? (
         <button
-          onClick={handleEnd}
+          onClick={() => {
+            void handleEnd(false);
+          }}
           disabled={loading}
           className="w-full bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-white font-bold py-4 rounded-xl text-lg transition-all shadow-md hover:shadow-lg active:scale-95"
         >
           {loading ? (lastAction === 'start' ? 'Starting...' : 'Ending...') : 'End Session'}
+        </button>
+      ) : (
+        <button
+          onClick={handleStopCyclePlan}
+          disabled={loading}
+          className="w-full bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-white font-bold py-4 rounded-xl text-lg transition-all shadow-md hover:shadow-lg active:scale-95"
+        >
+          Stop Cycle Plan
         </button>
       )}
 

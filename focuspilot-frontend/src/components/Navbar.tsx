@@ -113,7 +113,7 @@ function Navbar() {
               to="/agent-dashboard"
               className={`font-medium text-sm pb-1 transition ${getAgentDashboardClass()}`}
             >
-              🤖 Dashboard
+              Agent Dashboard
             </Link>
             <Link
               to="/execution"
