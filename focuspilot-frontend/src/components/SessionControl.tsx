@@ -46,6 +46,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const breakIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const autoEndingRef = useRef(false);
   const isBreakRunningRef = useRef(false);
+  const breakNotificationSentRef = useRef(false);
 
   const clampCycles = (value: number) => {
     if (!Number.isFinite(value)) return 1;
@@ -68,6 +69,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
 
   const startBreakPhase = useCallback(() => {
     isBreakRunningRef.current = true;
+    breakNotificationSentRef.current = false;
     setIsBreakRunning(true);
     setBreakElapsed(0);
     setBreakStartTimeMs(Date.now());
@@ -214,7 +216,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   }, [completeCyclePlan, isCyclePlanActive, loadActiveSession, onSessionEnd, startBreakPhase, targetCycles]);
 
   const notifyExtension = useCallback((
-    action: 'startSession' | 'endSession',
+    action: 'startSession' | 'endSession' | 'notifyBreakStarted' | 'notifyBreakEnded',
     currentSessionId?: string,
     sessionStartTime?: string,
     plannedDurationMins?: number
@@ -605,11 +607,12 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
 
   const startNextFocusAfterBreak = useCallback(async () => {
     stopBreakPhase();
+    notifyExtension('notifyBreakEnded');
     const started = await startFocusSession();
     if (!started) {
       completeCyclePlan();
     }
-  }, [completeCyclePlan, startFocusSession, stopBreakPhase]);
+  }, [completeCyclePlan, notifyExtension, startFocusSession, stopBreakPhase]);
 
   useEffect(() => {
     if (!isRunning || !sessionId || loading) return;
@@ -627,6 +630,14 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     void startNextFocusAfterBreak();
   }, [breakDurationMins, breakElapsed, isBreakRunning, isCyclePlanActive, loading, startNextFocusAfterBreak]);
 
+  useEffect(() => {
+    if (!isBreakRunning || !isCyclePlanActive) return;
+    if (breakNotificationSentRef.current) return;
+
+    breakNotificationSentRef.current = true;
+    notifyExtension('notifyBreakStarted');
+  }, [isBreakRunning, isCyclePlanActive, notifyExtension]);
+
   const displayedElapsed = isBreakRunning ? breakElapsed : elapsed;
   const phaseLabel = isBreakRunning ? 'Break Time' : (isRunning ? 'Session Active' : 'Focus Session');
   const phaseSubLabel = isBreakRunning
@@ -638,7 +649,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       isRunning
         ? 'bg-green-50 border-green-300'
         : isBreakRunning
-          ? 'bg-blue-50 border-blue-300'
+          ? 'bg-green-50 border-green-200'
         : 'bg-white border-gray-100'
     }`}>
 
@@ -694,12 +705,12 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
         isRunning ? 'bg-green-100' : 'bg-gray-50'
       }`}>
         <p className={`text-5xl font-mono font-bold tracking-widest ${
-          isRunning ? 'text-green-600' : isBreakRunning ? 'text-blue-600' : 'text-gray-300'
+          isRunning ? 'text-green-600' : isBreakRunning ? 'text-green-500' : 'text-gray-300'
         }`}>
           {formatTime(displayedElapsed)}
         </p>
         {(isRunning || isBreakRunning) && (
-          <p className={`text-xs mt-2 ${isBreakRunning ? 'text-blue-500' : 'text-green-500'}`}>
+          <p className={`text-xs mt-2 ${isBreakRunning ? 'text-green-500' : 'text-green-500'}`}>
             {Math.floor(displayedElapsed / 60)} minute{Math.floor(displayedElapsed / 60) !== 1 ? 's' : ''}
             {isBreakRunning ? ' on break' : ' focused'}
           </p>
@@ -730,11 +741,11 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       )}
 
       {isCyclePlanActive && (
-        <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
-          <p className="text-sm font-semibold text-indigo-700">
+        <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+          <p className="text-sm font-semibold text-green-700">
             Cycle progress: {Math.min(completedCycles + (isRunning ? 1 : 0), targetCycles)} / {targetCycles}
           </p>
-          <p className="text-xs text-indigo-600 mt-1">
+          <p className="text-xs text-green-600 mt-1">
             {isBreakRunning ? 'Break in progress. Next focus session will start automatically.' : 'Focus is active. Break starts automatically when this session ends.'}
           </p>
         </div>
