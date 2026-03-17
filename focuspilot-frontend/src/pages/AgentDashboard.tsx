@@ -48,13 +48,32 @@ function AgentDashboard() {
 
   const loadAll = async () => {
     try {
-      const [healthRes, summaryRes] = await Promise.all([
+      const [healthRes, summaryRes] = await Promise.allSettled([
         pipelineAPI.getHealth(),
         pipelineAPI.getSummary()
       ]);
-      setHealth(healthRes.data);
-      setSummary(summaryRes.data);
-      setLoadError(null);
+
+      let failedCalls = 0;
+
+      if (healthRes.status === 'fulfilled') {
+        setHealth(healthRes.value.data);
+      } else {
+        failedCalls += 1;
+        console.warn('Health fetch failed:', healthRes.reason);
+      }
+
+      if (summaryRes.status === 'fulfilled') {
+        setSummary(summaryRes.value.data);
+      } else {
+        failedCalls += 1;
+        console.warn('Summary fetch failed:', summaryRes.reason);
+      }
+
+      if (failedCalls === 0) {
+        setLoadError(null);
+      } else {
+        setLoadError('Some dashboard data could not be refreshed. Showing last known state.');
+      }
     } catch (error) {
       console.error('Dashboard load error:', error);
       setLoadError('Unable to load latest dashboard data. Showing last known state.');
