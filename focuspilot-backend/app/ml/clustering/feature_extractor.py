@@ -24,7 +24,6 @@ Features per session:
 """
 
 import numpy as np
-import pandas as pd
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 from app.database import get_supabase
