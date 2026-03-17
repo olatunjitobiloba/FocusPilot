@@ -34,6 +34,7 @@ function AgentDashboard() {
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   useEffect(() => {
@@ -53,8 +54,10 @@ function AgentDashboard() {
       ]);
       setHealth(healthRes.data);
       setSummary(summaryRes.data);
+      setLoadError(null);
     } catch (error) {
       console.error('Dashboard load error:', error);
+      setLoadError('Unable to load latest dashboard data. Showing last known state.');
     } finally {
       setLoading(false);
     }
@@ -84,14 +87,18 @@ function AgentDashboard() {
   }
 
   // Format risk timeline for chart
-  const riskTimeline = (summary?.risk_timeline || []).map((r: any) => ({
+  const riskTimeline = (Array.isArray(summary?.risk_timeline) ? summary.risk_timeline : []).map((r: any) => ({
     time: new Date(r.assessed_at).toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit'
     }),
-    risk: Math.round(r.risk_score * 100),
+    risk: Math.round((Number(r.risk_score) || 0) * 100),
     score: r.risk_score
   }));
+
+  const components = health && typeof health.components === 'object' && health.components
+    ? health.components
+    : {};
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -116,6 +123,12 @@ function AgentDashboard() {
             {running ? ' Running...' : ' Run Pipeline Now'}
           </button>
         </div>
+
+        {loadError && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 mb-6 text-amber-800 text-sm">
+            {loadError}
+          </div>
+        )}
 
         {/* Overall status banner */}
         <div
@@ -150,9 +163,11 @@ function AgentDashboard() {
 
         {/* Component health grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {Object.entries(health?.components || {}).map(([key, comp]: [string, any]) => {
+          {Object.entries(components).map(([key, comp]: [string, any]) => {
             const cfg = COMPONENT_CONFIG[key] || { icon: '', label: key };
-            const colors = STATUS_COLORS[comp.status] || STATUS_COLORS.idle;
+            const status = typeof comp?.status === 'string' ? comp.status : 'idle';
+            const description = typeof comp?.description === 'string' ? comp.description : 'No details available';
+            const colors = STATUS_COLORS[status] || STATUS_COLORS.idle;
 
             return (
               <div key={key} className={`bg-white rounded-xl border p-4 ${colors}`}>
@@ -160,8 +175,8 @@ function AgentDashboard() {
                   <span className="text-2xl">{cfg.icon}</span>
                   <p className="font-semibold text-sm">{cfg.label}</p>
                 </div>
-                <p className="text-xs capitalize font-medium">{comp.status.replace(/_/g, ' ')}</p>
-                <p className="text-xs opacity-75 mt-0.5 leading-tight">{comp.description}</p>
+                <p className="text-xs capitalize font-medium">{status.replace(/_/g, ' ')}</p>
+                <p className="text-xs opacity-75 mt-0.5 leading-tight">{description}</p>
               </div>
             );
           })}
@@ -270,7 +285,7 @@ function AgentDashboard() {
               {(summary?.events_today || []).length === 0 ? (
                 <p className="text-gray-400 text-sm text-center py-8">No events yet today</p>
               ) : (
-                (summary?.events_today || []).slice(0, 15).map((event: any, i: number) => (
+                (Array.isArray(summary?.events_today) ? summary.events_today : []).slice(0, 15).map((event: any, i: number) => (
                   <EventRow key={i} event={event} />
                 ))
               )}
@@ -287,7 +302,7 @@ function AgentDashboard() {
                   <p className="text-gray-400 text-sm">No interventions today. Great focus!</p>
                 </div>
               ) : (
-                (summary?.interventions || []).map((iv: any, i: number) => (
+                (Array.isArray(summary?.interventions) ? summary.interventions : []).map((iv: any, i: number) => (
                   <InterventionRow key={i} intervention={iv} />
                 ))
               )}
@@ -330,7 +345,9 @@ function EventRow({ event }: { event: any }) {
     monitoring_cycle: ''
   };
 
-  const icon = typeIcons[event.event_type] || '';
+  const eventType = typeof event?.event_type === 'string' ? event.event_type : 'unknown_event';
+  const icon = typeIcons[eventType] || '';
+  const createdAt = event?.created_at ? new Date(event.created_at) : null;
 
   return (
     <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
@@ -338,13 +355,13 @@ function EventRow({ event }: { event: any }) {
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
           <p className="text-xs font-medium text-gray-700 capitalize truncate">
-            {event.event_type.replace(/_/g, ' ')}
+            {eventType.replace(/_/g, ' ')}
           </p>
           <p className="text-xs text-gray-400 shrink-0 ml-2">
-            {new Date(event.created_at).toLocaleTimeString([], {
+            {(createdAt && !Number.isNaN(createdAt.getTime())) ? createdAt.toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit'
-            })}
+            }) : '--:--'}
           </p>
         </div>
         {event.event_data?.risk_score != null && (
@@ -366,28 +383,34 @@ function InterventionRow({ intervention }: { intervention: any }) {
     pending: 'text-blue-600'
   };
 
+  const interventionType = typeof intervention?.intervention_type === 'string'
+    ? intervention.intervention_type
+    : 'unknown';
+  const outcome = typeof intervention?.outcome === 'string' ? intervention.outcome : 'pending';
+  const createdAt = intervention?.created_at ? new Date(intervention.created_at) : null;
+
   return (
     <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
       <span className="text-base mt-0.5"></span>
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
           <p className="text-xs font-medium text-gray-700 capitalize truncate">
-            {(intervention.intervention_type || '').replace(/_/g, ' ')}
+            {interventionType.replace(/_/g, ' ')}
           </p>
           <p
             className={`text-xs font-semibold shrink-0 ml-2 capitalize
-            ${outcomeColors[intervention.outcome] || 'text-gray-500'}`}
+            ${outcomeColors[outcome] || 'text-gray-500'}`}
           >
-            {intervention.outcome}
+            {outcome}
           </p>
         </div>
         <p className="text-xs text-gray-500">
           Risk: {Math.round((intervention.risk_score_at_trigger || 0) * 100)}%
           {'  '}
-          {new Date(intervention.created_at).toLocaleTimeString([], {
+          {(createdAt && !Number.isNaN(createdAt.getTime())) ? createdAt.toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit'
-          })}
+          }) : '--:--'}
         </p>
       </div>
     </div>

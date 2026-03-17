@@ -1,6 +1,15 @@
 import React, { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
+function safeParseUser(raw: string | null) {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 function Navbar() {
   const location = useLocation();
   const activeTab = new URLSearchParams(location.search).get('tab');
@@ -9,7 +18,7 @@ function Navbar() {
     const token = localStorage.getItem('token');
     const refreshToken = localStorage.getItem('refresh_token');
     const userRaw = localStorage.getItem('user');
-    const user = userRaw ? JSON.parse(userRaw) : null;
+    const user = safeParseUser(userRaw);
     if (!token) return;
 
     window.postMessage(
@@ -59,7 +68,7 @@ function Navbar() {
       ? 'text-green-600 border-b-2 border-green-600'
       : 'text-gray-600 hover:text-gray-900';
 
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = safeParseUser(localStorage.getItem('user')) || {};
 
   return (
     <nav className="bg-white shadow sticky top-0 z-40">
