@@ -13,7 +13,7 @@ Executors do NOT log. The ExecutionAgent handles logging.
 
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
-from app.database import get_supabase
+from app.database import get_supabase, safe_query, execute_with_retries
 
 
 class SiteBlockExecutor:
@@ -49,7 +49,9 @@ class SiteBlockExecutor:
         Insert notification payload, retrying without extra_data for older DB schemas.
         """
         try:
-            self.supabase.table('notification_queue').insert(payload).execute()
+            execute_with_retries(
+                lambda client: client.table('notification_queue').insert(payload).execute()
+            )
         except Exception as error:
             if (
                 'extra_data' in payload
@@ -57,9 +59,11 @@ class SiteBlockExecutor:
             ):
                 fallback_payload = dict(payload)
                 fallback_payload.pop('extra_data', None)
-                self.supabase.table('notification_queue').insert(
-                    fallback_payload
-                ).execute()
+                execute_with_retries(
+                    lambda client: client.table('notification_queue').insert(
+                        fallback_payload
+                    ).execute()
+                )
                 return
             raise
 
@@ -76,12 +80,16 @@ class SiteBlockExecutor:
         Persist state, tolerating legacy upsert behavior that ignores unique user_id.
         """
         try:
-            self.supabase.table('site_block_state').upsert(payload).execute()
+            execute_with_retries(
+                lambda client: client.table('site_block_state').upsert(payload).execute()
+            )
         except Exception as error:
             if self._is_duplicate_site_block_state_user_error(error):
-                self.supabase.table('site_block_state').update(payload).eq(
-                    'user_id', self.user_id
-                ).execute()
+                execute_with_retries(
+                    lambda client: client.table('site_block_state').update(payload).eq(
+                        'user_id', self.user_id
+                    ).execute()
+                )
                 return
             raise
 
@@ -135,13 +143,13 @@ class SiteBlockExecutor:
         })
 
         # ── Schedule auto-unblock ──────────────────────────────────────
-        self.supabase.table('scheduled_actions').insert({
+        execute_with_retries(lambda client: client.table('scheduled_actions').insert({
             'user_id':      self.user_id,
             'action_type':  'unblock_sites',
             'action_data':  {'domains': domains_to_block},
             'scheduled_for': unblock_at.isoformat(),
             'status':       'pending'
-        }).execute()
+        }).execute())
 
         print(
             f"   🔒 Blocked {len(domains_to_block)} sites "
@@ -180,22 +188,23 @@ class SiteBlockExecutor:
 
     def get_block_state(self) -> Dict:
         """Get current block state."""
-        result = (
-            self.supabase
-            .table('site_block_state')
+        rows = safe_query(
+            lambda client: client.table('site_block_state')
             .select("*")
             .eq('user_id', self.user_id)
-            .execute()
+            .execute(),
+            fallback=[]
         )
 
-        if not result.data:
+        if not rows:
             return {
-                'is_blocked':      False,
+                'is_blocked': False,
                 'blocked_domains': [],
-                'unblock_at':      None
+                'unblock_at': None,
+                'status': 'idle',
             }
 
-        state = result.data[0]
+        state = rows[0]
 
         # Check if block has expired
         if state.get('unblock_at'):

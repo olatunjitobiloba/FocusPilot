@@ -38,6 +38,17 @@ def _is_transient_db_error(exc: Exception) -> bool:
         'a non-blocking socket operation could not be completed immediately',
         'connection reset',
         'timed out',
+        'server disconnected',
+        'remoteprocotolerror',
+        'remoteprotocolerror',
+        'protocol_error',
+        'connectionterminated',
+        'connection_terminated',
+        'errorcodes.protocol_error',
+        'errorcode',
+        'last_stream_id',
+        'stream_id',
+        'h2',
     ]
     return any(marker in message for marker in transient_markers)
 
@@ -49,7 +60,7 @@ def get_supabase(force_refresh: bool = False):
     return supabase
 
 
-def execute_with_retries(operation, retries: int = 2, base_delay_seconds: float = 0.12):
+def execute_with_retries(operation, retries: int = 3, base_delay_seconds: float = 0.15):
     last_error = None
 
     for attempt in range(retries + 1):
@@ -58,11 +69,51 @@ def execute_with_retries(operation, retries: int = 2, base_delay_seconds: float 
             return operation(client)
         except Exception as exc:
             last_error = exc
+            error_str = str(exc).lower()
+
+            print(
+                f"[DB] Attempt {attempt + 1}/{retries + 1} failed: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
+            is_http2_error = any(marker in error_str for marker in [
+                'protocol_error',
+                'connectionterminated',
+                'connection_terminated',
+                'stream_id',
+                'last_stream_id',
+                'remoteprotocolerror',
+                'errorcodes.protocol_error',
+                'h2',
+            ])
+
+            if is_http2_error:
+                # Ensure next retry uses a fresh HTTP connection/session.
+                print("[DB] HTTP/2 error detected - forcing client refresh")
+                get_supabase(force_refresh=True)
+
             if not _is_transient_db_error(exc) or attempt == retries:
                 raise
-            time.sleep(base_delay_seconds * (attempt + 1))
+
+            delay_seconds = base_delay_seconds * (attempt + 1)
+            print(f"[DB] Retrying in {delay_seconds:.2f}s...")
+            time.sleep(delay_seconds)
 
     raise last_error
+
+
+def safe_query(operation, fallback=None):
+    """
+    Execute a query with retry logic and return fallback on failure.
+    """
+    try:
+        result = execute_with_retries(operation)
+        if hasattr(result, 'data'):
+            return result.data
+        return result
+    except Exception as exc:
+        print(f"[DB] safe_query failed after retries: {exc}")
+        return fallback if fallback is not None else []
 
 
 def _extract_unknown_column_name(exc: Exception) -> str | None:

@@ -69,8 +69,27 @@ def undo_action(
 @router.get("/block-state")
 def get_block_state(user_id: str = Depends(get_current_user_id)):
     """Get current site block state."""
-    blocker = SiteBlockExecutor(user_id)
-    return blocker.get_block_state()
+    try:
+        blocker = SiteBlockExecutor(user_id)
+        state = blocker.get_block_state()
+        if isinstance(state, dict):
+            return state
+    except Exception as exc:
+        return {
+            'is_blocked': False,
+            'blocked_domains': [],
+            'unblock_at': None,
+            'status': 'degraded',
+            'error': str(exc),
+        }
+
+    return {
+        'is_blocked': False,
+        'blocked_domains': [],
+        'unblock_at': None,
+        'status': 'degraded',
+        'error': 'Invalid block state payload',
+    }
 
 
 @router.post("/block")
