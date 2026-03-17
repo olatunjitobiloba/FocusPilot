@@ -5,9 +5,27 @@ conftest.py is automatically loaded by pytest before any test file.
 """
 
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from app.main import app
 import uuid
+
+
+# ── Disable background workers ─────────────────────────────────────────
+@pytest.fixture(scope="session", autouse=True)
+def disable_background_workers():
+    """
+    Prevent the orchestrator and action scheduler from starting during tests.
+    Their background threads make real network calls to Supabase which can
+    interfere with the Supabase client used by test fixtures.
+    """
+    with (
+        patch("app.main.orchestrator.start"),
+        patch("app.main.orchestrator.stop"),
+        patch("app.main.action_scheduler.start"),
+        patch("app.main.action_scheduler.stop"),
+    ):
+        yield
 
 # ── Test client ────────────────────────────────────────────────────────
 @pytest.fixture(scope="module")
