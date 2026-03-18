@@ -47,6 +47,9 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const autoEndingRef = useRef(false);
   const isBreakRunningRef = useRef(false);
   const breakNotificationSentRef = useRef(false);
+  const completedCyclesRef = useRef(0);
+  const targetCyclesRef = useRef(1);
+  const isCyclePlanActiveRef = useRef(false);
 
   const clampCycles = (value: number) => {
     if (!Number.isFinite(value)) return 1;
@@ -62,6 +65,9 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
 
   const completeCyclePlan = useCallback(() => {
     console.log(`[Cycle Debug] Cycle plan completed`);
+    isCyclePlanActiveRef.current = false;
+    completedCyclesRef.current = 0;
+    targetCyclesRef.current = 1;
     setIsCyclePlanActive(false);
     setCompletedCycles(0);
     setTargetCycles(1);
@@ -76,6 +82,39 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     setBreakElapsed(0);
     setBreakStartTimeMs(Date.now());
   }, []);
+
+  const advanceCycleAfterFocusEnd = useCallback((source: 'dashboard' | 'extension') => {
+    if (!isCyclePlanActiveRef.current || isBreakRunningRef.current) {
+      return;
+    }
+
+    const nextCompleted = completedCyclesRef.current + 1;
+    completedCyclesRef.current = nextCompleted;
+    setCompletedCycles(nextCompleted);
+
+    console.log(`[Cycle Debug] Focus session ended (${source}). Completed: ${nextCompleted}, Target: ${targetCyclesRef.current}`);
+
+    if (nextCompleted < targetCyclesRef.current) {
+      console.log(`[Cycle Debug] Starting break phase (${nextCompleted}/${targetCyclesRef.current})`);
+      startBreakPhase();
+      return;
+    }
+
+    console.log(`[Cycle Debug] All cycles completed. Ending cycle plan.`);
+    completeCyclePlan();
+  }, [completeCyclePlan, startBreakPhase]);
+
+  useEffect(() => {
+    completedCyclesRef.current = completedCycles;
+  }, [completedCycles]);
+
+  useEffect(() => {
+    targetCyclesRef.current = targetCycles;
+  }, [targetCycles]);
+
+  useEffect(() => {
+    isCyclePlanActiveRef.current = isCyclePlanActive;
+  }, [isCyclePlanActive]);
 
   const loadDurations = useCallback(async () => {
     try {
@@ -181,19 +220,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
           autoEndingRef.current = false;
           onSessionEnd();
 
-          if (isCyclePlanActive && !isBreakRunningRef.current) {
-            let nextCompleted = 0;
-            setCompletedCycles((prev) => {
-              nextCompleted = prev + 1;
-              return nextCompleted;
-            });
-
-            if (nextCompleted < targetCycles) {
-              startBreakPhase();
-            } else {
-              completeCyclePlan();
-            }
-          }
+          advanceCycleAfterFocusEnd('extension');
 
           setTimeout(() => {
             void loadActiveSession().catch(() => {
@@ -215,7 +242,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
 
     window.addEventListener('message', handleExtensionMessage);
     return () => window.removeEventListener('message', handleExtensionMessage);
-  }, [completeCyclePlan, isCyclePlanActive, loadActiveSession, onSessionEnd, startBreakPhase, targetCycles]);
+  }, [advanceCycleAfterFocusEnd, loadActiveSession, onSessionEnd]);
 
   const notifyExtension = useCallback((
     action: 'startSession' | 'endSession' | 'notifyBreakStarted' | 'notifyBreakEnded',
@@ -522,6 +549,9 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   const handleStart = async () => {
     completeCyclePlan();
     const cycles = clampCycles(selectedCycles);
+    targetCyclesRef.current = cycles;
+    completedCyclesRef.current = 0;
+    isCyclePlanActiveRef.current = true;
     setTargetCycles(cycles);
     setCompletedCycles(0);
     setIsCyclePlanActive(true);
@@ -561,21 +591,8 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       notifyExtension('endSession', endingSessionId);
       onSessionEnd(); // refresh dashboard
 
-      if (advanceCycle && isCyclePlanActive) {
-        let nextCompleted = 0;
-        setCompletedCycles((prev) => {
-          nextCompleted = prev + 1;
-          return nextCompleted;
-        });
-
-        console.log(`[Cycle Debug] Focus session ended. Completed: ${nextCompleted}, Target: ${targetCycles}`);
-        if (nextCompleted < targetCycles) {
-          console.log(`[Cycle Debug] Starting break phase (${nextCompleted}/${targetCycles})`);
-          startBreakPhase();
-        } else {
-          console.log(`[Cycle Debug] All cycles completed. Ending cycle plan.`);
-          completeCyclePlan();
-        }
+      if (advanceCycle) {
+        advanceCycleAfterFocusEnd('dashboard');
       } else {
         console.log(`[Cycle Debug] Manual end or cycle plan inactive. Ending.`);
         completeCyclePlan();
@@ -598,14 +615,12 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   }, [
     completeCyclePlan,
     elapsed,
-    isCyclePlanActive,
+    advanceCycleAfterFocusEnd,
     loadActiveSession,
     notifyExtension,
     onSessionEnd,
     sessionId,
     sessionStartTimeMs,
-    startBreakPhase,
-    targetCycles,
   ]);
 
   const handleStopCyclePlan = () => {
@@ -614,6 +629,16 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   };
 
   const startNextFocusAfterBreak = useCallback(async () => {
+    if (!isCyclePlanActiveRef.current) {
+      stopBreakPhase();
+      return;
+    }
+
+    if (completedCyclesRef.current >= targetCyclesRef.current) {
+      completeCyclePlan();
+      return;
+    }
+
     console.log(`[Cycle Debug] Break ended. Starting next focus session.`);
     stopBreakPhase();
     notifyExtension('notifyBreakEnded');
