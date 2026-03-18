@@ -186,6 +186,69 @@ class TestDNATrainerPersistence:
         assert 'heatmap_data' in payload
         assert payload['heatmap_data'] == insight_data['heatmap_data']
 
+    def test_save_results_falls_back_when_heatmap_column_missing(self):
+        from app.ml.clustering.dna_trainer import DNATrainer
+
+        trainer = DNATrainer.__new__(DNATrainer)
+        trainer.user_id = 'test-user'
+
+        query = MagicMock()
+        query.upsert.return_value = query
+        query.execute.side_effect = [
+            Exception("{'message': \"Could not find the 'heatmap_data' column of 'productivity_clusters' in the schema cache\", 'code': 'PGRST204'}"),
+            MagicMock(data=[{'id': 'row-1'}])
+        ]
+
+        supabase = MagicMock()
+        supabase.table.return_value = query
+        trainer.supabase = supabase
+
+        insight_data = {
+            'peak_hours': [],
+            'best_session_length': {'avg_minutes': 25},
+            'worst_patterns': [],
+            'insights': [],
+            'heatmap_data': [{'hour': 10, 'day': 0, 'quality': 73, 'count': 2}],
+        }
+
+        trainer._save_results(
+            profiles=[{'cluster_id': 0, 'name': 'Deep Focus'}],
+            assignments={'s1': 0},
+            insight_data=insight_data,
+            k=1,
+            n_sessions=1,
+        )
+
+        assert query.upsert.call_count == 2
+        first_payload = query.upsert.call_args_list[0][0][0]
+        second_payload = query.upsert.call_args_list[1][0][0]
+        assert 'heatmap_data' in first_payload
+        assert 'heatmap_data' not in second_payload
+
+    def test_get_heatmap_data_rebuilds_when_missing(self):
+        from app.ml.clustering.dna_trainer import DNATrainer
+
+        trainer = DNATrainer.__new__(DNATrainer)
+        trainer.user_id = 'test-user'
+        trainer.extractor = MagicMock()
+        trainer.insights = MagicMock()
+
+        X = np.array([
+            [10, 0, 20, 7, 0, 0, 0, 1, 10, 0, 1, 0, 0, 0, 1],
+            [11, 1, 25, 7, 0, 0, 0, 1, 10, 0, 1, 0, 0, 0, 1],
+        ], dtype=np.float32)
+        trainer.extractor.extract_all_sessions.return_value = (X, [], ['s1', 's2'])
+        trainer.insights._build_heatmap.return_value = [{'hour': 10, 'day': 0, 'quality': 73, 'count': 1}]
+
+        dna = {
+            'session_assignments': {'s1': 0, 's2': 1},
+            'cluster_profiles': [{'cluster_id': 0, 'quality_score': 73}, {'cluster_id': 1, 'quality_score': 64}],
+            'heatmap_data': []
+        }
+
+        heatmap = trainer.get_heatmap_data(dna)
+        assert heatmap == [{'hour': 10, 'day': 0, 'quality': 73, 'count': 1}]
+
 
 # Run tests
 # pytest tests/test_dna.py -v

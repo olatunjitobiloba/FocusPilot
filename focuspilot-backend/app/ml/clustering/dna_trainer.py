@@ -12,6 +12,7 @@ Steps:
 
 from datetime import datetime
 from typing import Dict, Any
+import numpy as np
 from app.ml.clustering.feature_extractor import SessionFeatureExtractor
 from app.ml.clustering.clusterer         import ProductivityClusterer
 from app.ml.clustering.insight_generator import InsightGenerator
@@ -131,13 +132,30 @@ class DNATrainer:
             'sessions_analyzed':  n_sessions
         }
 
+        save_payload = dict(payload)
+
         try:
             self.supabase.table('productivity_clusters').upsert(
-                payload,
+                save_payload,
                 on_conflict='user_id'
             ).execute()
             return
         except Exception as e:
+            # Compatibility path for deployments where optional columns
+            # (e.g. heatmap_data) are not yet present.
+            save_payload = self._strip_missing_optional_columns(save_payload, e)
+
+            if save_payload != payload:
+                try:
+                    self.supabase.table('productivity_clusters').upsert(
+                        save_payload,
+                        on_conflict='user_id'
+                    ).execute()
+                    return
+                except Exception as inner:
+                    if not self._is_on_conflict_error(inner):
+                        raise
+
             if not self._is_on_conflict_error(e):
                 raise
 
@@ -154,12 +172,12 @@ class DNATrainer:
             (
                 self.supabase
                 .table('productivity_clusters')
-                .update(payload)
+                .update(save_payload)
                 .eq('user_id', self.user_id)
                 .execute()
             )
         else:
-            self.supabase.table('productivity_clusters').insert(payload).execute()
+            self.supabase.table('productivity_clusters').insert(save_payload).execute()
 
     def _save_session_assignments(
         self,
@@ -212,6 +230,69 @@ class DNATrainer:
             '42p10' in lowered or
             'no unique or exclusion constraint matching the on conflict specification' in lowered
         )
+
+    def _is_missing_column_error(self, error: Exception, column: str) -> bool:
+        text = str(error)
+        lowered = text.lower()
+        return (
+            'pgrst204' in lowered and
+            f"could not find the '{column}' column" in lowered
+        )
+
+    def _strip_missing_optional_columns(self, payload: Dict[str, Any], error: Exception) -> Dict[str, Any]:
+        sanitized = dict(payload)
+        if self._is_missing_column_error(error, 'heatmap_data'):
+            sanitized.pop('heatmap_data', None)
+        return sanitized
+
+    def get_heatmap_data(self, dna: Dict[str, Any] | None) -> list:
+        """
+        Return persisted heatmap when available, otherwise rebuild it from
+        saved session assignments for schema compatibility.
+        """
+        if not dna:
+            return []
+
+        persisted = dna.get('heatmap_data')
+        if isinstance(persisted, list) and persisted:
+            return persisted
+
+        return self._rebuild_heatmap_from_assignments(dna)
+
+    def _rebuild_heatmap_from_assignments(self, dna: Dict[str, Any]) -> list:
+        assignments = dna.get('session_assignments') or {}
+        profiles = dna.get('cluster_profiles') or []
+
+        if not assignments or not profiles:
+            return []
+
+        try:
+            X, _, session_ids = self.extractor.extract_all_sessions(min_sessions=1)
+
+            row_indexes = []
+            label_values = []
+
+            for idx, session_id in enumerate(session_ids):
+                label = assignments.get(session_id)
+                if label is None:
+                    continue
+                try:
+                    label_int = int(label)
+                except (TypeError, ValueError):
+                    continue
+
+                row_indexes.append(idx)
+                label_values.append(label_int)
+
+            if not row_indexes:
+                return []
+
+            aligned_X = X[row_indexes]
+            aligned_labels = np.array(label_values, dtype=np.int32)
+            return self.insights._build_heatmap(aligned_X, aligned_labels, profiles)
+        except Exception as exc:
+            print(f"WARNING Could not rebuild heatmap for {self.user_id[:8]}: {exc}")
+            return []
 
     def get_existing_dna(self) -> Dict | None:
         """Get previously trained DNA (no retraining)."""

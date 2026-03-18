@@ -70,6 +70,8 @@ def get_dna_results(user_id: str = Depends(get_current_user_id)):
             )
         }
 
+    heatmap_data = trainer.get_heatmap_data(dna)
+
     return {
         'trained':             True,
         'n_clusters':          dna.get('n_clusters'),
@@ -79,7 +81,7 @@ def get_dna_results(user_id: str = Depends(get_current_user_id)):
         'best_session_length': dna.get('best_session_length', {}),
         'worst_patterns':      dna.get('worst_patterns', []),
         'insights':            dna.get('insights', []),
-        'heatmap_data':        dna.get('heatmap_data', []),
+        'heatmap_data':        heatmap_data,
         'trained_at':          dna.get('trained_at')
     }
 
