@@ -93,12 +93,8 @@ class WeeklyReportGenerator:
 
         total_mins = 0.0
         for s in sessions:
-            start = datetime.fromisoformat(
-                s['start_time'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
-            end = datetime.fromisoformat(
-                s['end_time'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
+            start = self.aggregator._parse_datetime(s['start_time'])
+            end = self.aggregator._parse_datetime(s['end_time'])
             total_mins += (end - start).total_seconds() / 60
 
         scores = [

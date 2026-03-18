@@ -14,8 +14,10 @@ Returns structured analytics data ready for the frontend.
 """
 
 import numpy as np
+import re
 from datetime import datetime, timedelta, date
 from typing import Dict, List, Any, Optional, Tuple
+from dateutil.parser import isoparse
 from app.database import get_supabase
 
 
@@ -130,6 +132,34 @@ class AnalyticsAggregator:
 
     # ── Computations ───────────────────────────────────────────────────
 
+    def _parse_datetime(self, value: str) -> datetime:
+        """
+        Parse DB timestamps with tolerance for legacy formats.
+
+        Handles:
+        - trailing Z timezone marker
+        - space separator instead of 'T'
+        - fractional seconds longer than 6 digits
+        """
+        text = str(value or '').strip().strip("\"'")
+        if not text:
+            raise ValueError('Empty datetime value')
+
+        text = text.replace(' ', 'T', 1).replace('Z', '+00:00')
+
+        normalized = re.sub(
+            r"\.(\d{6})\d+(?=([+-]\d{2}:\d{2})?$)",
+            r".\1",
+            text
+        )
+
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            parsed = isoparse(normalized)
+
+        return parsed.replace(tzinfo=None)
+
     def _compute_summary(
         self,
         sessions: List[Dict],
@@ -149,12 +179,8 @@ class AnalyticsAggregator:
         # Total focused time
         total_mins = 0.0
         for s in sessions:
-            start = datetime.fromisoformat(
-                s['start_time'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
-            end = datetime.fromisoformat(
-                s['end_time'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
+            start = self._parse_datetime(s['start_time'])
+            end = self._parse_datetime(s['end_time'])
             total_mins += (end - start).total_seconds() / 60
 
         total_hours = round(total_mins / 60, 1)
@@ -209,9 +235,7 @@ class AnalyticsAggregator:
         weeks: Dict[str, List[Dict]] = {}
 
         for s in sessions:
-            start = datetime.fromisoformat(
-                s['start_time'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
+            start = self._parse_datetime(s['start_time'])
 
             week_key = start.strftime('%Y-W%W')
 
@@ -230,12 +254,8 @@ class AnalyticsAggregator:
 
             total_mins = 0.0
             for s in week_sessions:
-                start = datetime.fromisoformat(
-                    s['start_time'].replace('Z', '+00:00')
-                ).replace(tzinfo=None)
-                end = datetime.fromisoformat(
-                    s['end_time'].replace('Z', '+00:00')
-                ).replace(tzinfo=None)
+                start = self._parse_datetime(s['start_time'])
+                end = self._parse_datetime(s['end_time'])
                 total_mins += (end - start).total_seconds() / 60
 
             trend.append({
@@ -287,12 +307,8 @@ class AnalyticsAggregator:
 
             total_mins = 0.0
             for s in day_sess:
-                start = datetime.fromisoformat(
-                    s['start_time'].replace('Z', '+00:00')
-                ).replace(tzinfo=None)
-                end = datetime.fromisoformat(
-                    s['end_time'].replace('Z', '+00:00')
-                ).replace(tzinfo=None)
+                start = self._parse_datetime(s['start_time'])
+                end = self._parse_datetime(s['end_time'])
                 total_mins += (end - start).total_seconds() / 60
 
             breakdown.append({
@@ -434,12 +450,8 @@ class AnalyticsAggregator:
 
         durations = []
         for s in sessions:
-            start = datetime.fromisoformat(
-                s['start_time'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
-            end = datetime.fromisoformat(
-                s['end_time'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
+            start = self._parse_datetime(s['start_time'])
+            end = self._parse_datetime(s['end_time'])
             durations.append((end - start).total_seconds() / 60)
 
         scores = [
@@ -563,9 +575,7 @@ class AnalyticsAggregator:
         for s in sessions:
             if s.get('focus_score') is None:
                 continue
-            start   = datetime.fromisoformat(
-                s['start_time'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
+            start = self._parse_datetime(s['start_time'])
             dow     = start.weekday()
             day_scores[dow].append(s['focus_score'])
 
@@ -602,9 +612,7 @@ class AnalyticsAggregator:
         for s in sessions:
             if s.get('focus_score') is None:
                 continue
-            start = datetime.fromisoformat(
-                s['start_time'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
+            start = self._parse_datetime(s['start_time'])
             h = start.hour
             if h not in hour_scores:
                 hour_scores[h] = []
@@ -634,12 +642,8 @@ class AnalyticsAggregator:
         """Format sessions for the session history table."""
         formatted = []
         for s in sessions:
-            start = datetime.fromisoformat(
-                s['start_time'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
-            end = datetime.fromisoformat(
-                s['end_time'].replace('Z', '+00:00')
-            ).replace(tzinfo=None)
+            start = self._parse_datetime(s['start_time'])
+            end = self._parse_datetime(s['end_time'])
             duration = round((end - start).total_seconds() / 60, 1)
 
             formatted.append({
