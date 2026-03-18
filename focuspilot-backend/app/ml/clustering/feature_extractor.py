@@ -28,7 +28,7 @@ from datetime import datetime
 import re
 from typing import Dict, List, Tuple, Optional
 from dateutil.parser import isoparse
-from app.database import get_supabase
+from app.database import get_supabase, execute_with_retries
 
 
 # Productive domains (opposite of distraction)
@@ -74,6 +74,7 @@ class SessionFeatureExtractor:
             ids:      Session IDs (for assignment mapping)
         """
         sessions = self._load_sessions()
+        activity_by_session = self._load_activity_by_session()
 
         if len(sessions) < min_sessions:
             raise ValueError(
@@ -87,7 +88,10 @@ class SessionFeatureExtractor:
 
         for session in sessions:
             try:
-                feat = self._extract_session_features(session)
+                feat = self._extract_session_features(
+                    session,
+                    activity_override=activity_by_session.get(session['id'], [])
+                )
                 features.append(feat)
                 valid_sessions.append(session)
                 session_ids.append(session['id'])
@@ -111,8 +115,8 @@ class SessionFeatureExtractor:
 
     def _load_sessions(self) -> List[Dict]:
         """Load all completed sessions with activity data."""
-        result = (
-            self.supabase
+        result = execute_with_retries(
+            lambda client: client
             .table('focus_sessions')
             .select("*")
             .eq('user_id', self.user_id)
@@ -122,9 +126,33 @@ class SessionFeatureExtractor:
         )
         return result.data or []
 
+    def _load_activity_by_session(self) -> Dict[str, List[Dict]]:
+        """Load all browsing activity once and group by session_id."""
+        result = execute_with_retries(
+            lambda client: client
+            .table('browsing_activity')
+            .select("session_id, domain, duration_seconds, timestamp")
+            .eq('user_id', self.user_id)
+            .execute()
+        )
+
+        grouped: Dict[str, List[Dict]] = {}
+        for row in result.data or []:
+            session_id = row.get('session_id')
+            if not session_id:
+                continue
+            grouped.setdefault(session_id, []).append({
+                'domain': row.get('domain'),
+                'duration_seconds': row.get('duration_seconds'),
+                'timestamp': row.get('timestamp')
+            })
+
+        return grouped
+
     def _extract_session_features(
         self,
-        session: Dict
+        session: Dict,
+        activity_override: Optional[List[Dict]] = None
     ) -> List[float]:
         """Extract feature vector for one session."""
 
@@ -162,7 +190,7 @@ class SessionFeatureExtractor:
         completed = 1 if duration_minutes >= (planned * 0.80) else 0
 
         # ── Activity features ──────────────────────────────────────────
-        activity = self._load_session_activity(session['id'])
+        activity = activity_override if activity_override is not None else self._load_session_activity(session['id'])
 
         distraction_ratio  = 0.0
         distraction_count  = 0
@@ -260,8 +288,8 @@ class SessionFeatureExtractor:
         session_id: str
     ) -> List[Dict]:
         """Load browsing activity for a session."""
-        result = (
-            self.supabase
+        result = execute_with_retries(
+            lambda client: client
             .table('browsing_activity')
             .select("domain, duration_seconds, timestamp")
             .eq('session_id', session_id)
