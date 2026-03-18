@@ -35,8 +35,8 @@ function ProductivityDNA() {
     setTraining(true);
     setError(null);
     try {
-      const res = await dnaAPI.train();
-      setDna(res.data);
+      await dnaAPI.train();
+      await Promise.all([loadDNA(), loadEligibility()]);
     } catch (err: any) {
       setError(
         err.response?.data?.detail ||
@@ -44,7 +44,6 @@ function ProductivityDNA() {
       );
     } finally {
       setTraining(false);
-      loadEligibility();
     }
   };
 

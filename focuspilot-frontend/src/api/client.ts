@@ -261,7 +261,7 @@ export const analyticsAPI = {
 
 export const dnaAPI = {
   train: () =>
-    api.post('/dna/train/sync'),
+    api.post('/dna/train/sync', {}, { timeout: 120000 }),
 
   getResults: () =>
     api.get('/dna/results'),
