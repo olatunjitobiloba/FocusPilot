@@ -21,7 +21,7 @@ function ProductivityDNA() {
     loadEligibility();
   }, []);
 
-  const loadDNA = async () => {
+  const loadDNA = async (showLoadError = true) => {
     try {
       const res = await dnaAPI.getResults();
       setDna(res.data);
@@ -29,7 +29,9 @@ function ProductivityDNA() {
       return res.data;
     } catch (err) {
       console.error('DNA load error:', err);
-      setLoadError('Could not load saved DNA results right now. Please retry.');
+      if (showLoadError) {
+        setLoadError('Could not load saved DNA results right now. Please retry.');
+      }
       throw err;
     } finally {
       setLoading(false);
@@ -48,7 +50,7 @@ function ProductivityDNA() {
       }
 
       try {
-        await loadDNA();
+        await loadDNA(false);
       } catch {
         // Preserve successful training payload above; a failed reload should not
         // bounce the UI back to the not-trained state.
@@ -454,6 +456,10 @@ function FocusHeatmap({ heatmapData }: { heatmapData: HeatmapCell[] }) {
   const filledSlots = Object.keys(lookup).length;
   const coveragePct = Math.round((filledSlots / totalSlots) * 100);
   const totalSessions = Object.values(lookup).reduce((sum, c) => sum + c.count, 0);
+  const qualityValues = Object.values(lookup).map((cell) => cell.quality);
+  const minQuality = qualityValues.length ? Math.min(...qualityValues) : 0;
+  const maxQuality = qualityValues.length ? Math.max(...qualityValues) : 100;
+  const qualityRange = Math.max(1, maxQuality - minQuality);
 
   const getCellTone = (quality: number | undefined) => {
     if (quality === undefined) {
@@ -465,13 +471,17 @@ function FocusHeatmap({ heatmapData }: { heatmapData: HeatmapCell[] }) {
       };
     }
 
-    if (quality >= 75) {
+    // Scale colors relative to the user's own quality range so low/high cells
+    // remain distinguishable even when absolute scores are tightly clustered.
+    const normalized = (quality - minQuality) / qualityRange;
+
+    if (normalized >= 0.75) {
       return { backgroundColor: '#3730a3', borderColor: '#312e81' };
     }
-    if (quality >= 55) {
+    if (normalized >= 0.5) {
       return { backgroundColor: '#4f46e5', borderColor: '#4338ca' };
     }
-    if (quality >= 35) {
+    if (normalized >= 0.25) {
       return { backgroundColor: '#818cf8', borderColor: '#6366f1' };
     }
 
