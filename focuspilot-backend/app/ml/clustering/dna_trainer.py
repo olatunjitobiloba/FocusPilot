@@ -16,7 +16,7 @@ import numpy as np
 from app.ml.clustering.feature_extractor import SessionFeatureExtractor
 from app.ml.clustering.clusterer         import ProductivityClusterer
 from app.ml.clustering.insight_generator import InsightGenerator
-from app.database import get_supabase
+from app.database import get_supabase, execute_with_retries
 
 
 class DNATrainer:
@@ -296,8 +296,8 @@ class DNATrainer:
 
     def get_existing_dna(self) -> Dict | None:
         """Get previously trained DNA (no retraining)."""
-        result = (
-            self.supabase
+        result = execute_with_retries(
+            lambda client: client
             .table('productivity_clusters')
             .select("*")
             .eq('user_id', self.user_id)
