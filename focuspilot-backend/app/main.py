@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.ml.agent.orchestrator import orchestrator
 from app.ml.agent.scheduler import action_scheduler
-from app.routes import auth, sessions, agent as agent_router, stats, blocklist, analytics, recommendations, suggestions, health, whitelist, ml_data, settings, predictions, decisions, executions as execution_router, pipeline as pipeline_router, dna as dna_router
+from app.routes import auth, sessions, agent as agent_router, stats, blocklist, analytics as analytics_router, recommendations, suggestions, health, whitelist, ml_data, settings, predictions, decisions, executions as execution_router, pipeline as pipeline_router, dna as dna_router
 from app.database import get_supabase
 
 app = FastAPI(
@@ -32,7 +32,7 @@ app.include_router(sessions.router)
 app.include_router(agent_router.router)
 app.include_router(stats.router)
 app.include_router(blocklist.router)
-app.include_router(analytics.router)
+app.include_router(analytics_router.router)
 app.include_router(recommendations.router)
 app.include_router(suggestions.router)
 app.include_router(health.router)

@@ -1,8 +1,14 @@
+"""
+Analytics endpoints — expose analytics data.
+"""
+
 # app/routes/analytics.py
 from fastapi import APIRouter, Depends, Query, HTTPException
 from app.auth import get_current_user_id
 from app.database import execute_with_retries
 from app.domain_whitelist import filter_activities_by_domain
+from app.analytics.aggregator import AnalyticsAggregator
+from app.analytics.report_generator import WeeklyReportGenerator
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from typing import Optional
@@ -42,6 +48,103 @@ def get_productive_domains(supabase, user_id: str) -> set[str]:
         for item in (result.data or [])
         if item.get('domain')
     }
+
+
+def get_analytics_snapshot(user_id: str, days: int):
+    """Load aggregated analytics safely for endpoint responses."""
+    try:
+        aggregator = AnalyticsAggregator(user_id)
+        return aggregator.compute_all(days=days)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail='Analytics unavailable right now'
+        )
+
+
+@router.get("/overview")
+def get_overview(
+    days: int = Query(default=30, ge=7, le=90),
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Get full analytics overview for the last N days.
+    Includes summary, trends, breakdowns, and session history.
+    """
+    return get_analytics_snapshot(user_id, days)
+
+
+@router.get("/summary")
+def get_summary(
+    days: int = Query(default=7, ge=1, le=90),
+    user_id: str = Depends(get_current_user_id)
+):
+    """Get just the summary metrics."""
+    data = get_analytics_snapshot(user_id, days)
+    return {
+        'summary': data.get('summary', {}),
+        'streak': data.get('streak', {}),
+        'best_day': data.get('best_day', {}),
+        'best_hour': data.get('best_hour', {})
+    }
+
+
+@router.get("/trends")
+def get_trends(
+    days: int = Query(default=30, ge=7, le=90),
+    user_id: str = Depends(get_current_user_id)
+):
+    """Get trend data for charts."""
+    data = get_analytics_snapshot(user_id, days)
+    return {
+        'weekly_trend': data.get('weekly_trend', []),
+        'daily_breakdown': data.get('daily_breakdown', []),
+        'risk_trend': data.get('risk_trend', [])
+    }
+
+
+@router.get("/sessions")
+def get_session_history(
+    days: int = Query(default=30, ge=7, le=90),
+    user_id: str = Depends(get_current_user_id)
+):
+    """Get formatted session history."""
+    data = get_analytics_snapshot(user_id, days)
+    sessions = data.get('sessions', [])
+    return {
+        'sessions': sessions,
+        'total': len(sessions)
+    }
+
+
+@router.get("/weekly-report")
+def get_weekly_report(user_id: str = Depends(get_current_user_id)):
+    """
+    Get this week's full report with improvement metrics
+    and personalized recommendations.
+    """
+    try:
+        generator = WeeklyReportGenerator(user_id)
+        return generator.generate()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail='Weekly report unavailable right now'
+        )
+
+
+@router.get("/agent-stats")
+def get_agent_stats(
+    days: int = Query(default=30, ge=7, le=90),
+    user_id: str = Depends(get_current_user_id)
+):
+    """Get agent effectiveness statistics."""
+    data = get_analytics_snapshot(user_id, days)
+    return data.get('agent_stats', {})
 
 @router.get("/distractions")
 def get_distraction_analysis(
@@ -110,52 +213,14 @@ def get_distraction_analysis(
 
 @router.get("/time-breakdown")
 def get_time_breakdown(
-    days: int = Query(7, ge=1, le=30),
+    days: int = Query(30, ge=7, le=90),
     user_id: str = Depends(get_current_user_id)
 ):
     """
-    Break down time by category (productive vs distracting)
+    Get time breakdown by site category.
     """
-    # Get sessions and activities
-    start_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-
-    sessions_result = run_db(
-        lambda supabase: supabase.table('focus_sessions').select("*").eq('user_id', user_id).gte('start_time', start_date).execute(),
-        "Database unavailable while loading time breakdown sessions"
-    )
-
-    activities_result = run_db(
-        lambda supabase: supabase.table('browsing_activity').select("*").eq('user_id', user_id).gte('timestamp', start_date).execute(),
-        "Database unavailable while loading time breakdown activities"
-    )
-    
-    sessions = sessions_result.data
-    productive_domains = get_productive_domains(None, user_id)
-    activities = [
-        activity for activity in filter_activities_by_domain(activities_result.data)
-        if normalize_domain(activity.get('domain', '')) not in productive_domains
-    ]
-    
-    # Calculate focus time
-    total_focus_minutes = sum(s['duration_minutes'] or 0 for s in sessions if s['end_time'])
-    
-    # Calculate distraction time (time on blocked sites during sessions)
-    # For now, we'll use all browsing activity as potential distraction
-    total_distraction_seconds = sum(a['duration_seconds'] or 0 for a in activities)
-    total_distraction_minutes = total_distraction_seconds / 60
-    
-    # Calculate productive time (focus time - distraction time)
-    productive_minutes = max(total_focus_minutes - total_distraction_minutes, 0)
-    
-    return {
-        "period_days": days,
-        "total_focus_minutes": round(total_focus_minutes, 1),
-        "productive_minutes": round(productive_minutes, 1),
-        "distraction_minutes": round(total_distraction_minutes, 1),
-        "productive_hours": round(productive_minutes / 60, 2),
-        "distraction_hours": round(total_distraction_minutes / 60, 2),
-        "productivity_percentage": round((productive_minutes / max(total_focus_minutes, 1)) * 100, 1)
-    }
+    data = get_analytics_snapshot(user_id, days)
+    return data.get('time_breakdown', {})
 
 @router.get("/hourly-pattern")
 def get_hourly_pattern(
