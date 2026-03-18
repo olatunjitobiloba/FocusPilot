@@ -126,6 +126,7 @@ class DNATrainer:
             'best_session_length': insight_data['best_session_length'],
             'worst_patterns':     insight_data['worst_patterns'],
             'insights':           insight_data['insights'],
+            'heatmap_data':       insight_data['heatmap_data'],
             'trained_at':         datetime.utcnow().isoformat(),
             'sessions_analyzed':  n_sessions
         }

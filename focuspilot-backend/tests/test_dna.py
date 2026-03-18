@@ -150,5 +150,42 @@ class TestInsightGenerator:
         assert 'avg_minutes' in bsl
 
 
+class TestDNATrainerPersistence:
+
+    def test_save_results_includes_heatmap_data(self):
+        from app.ml.clustering.dna_trainer import DNATrainer
+
+        trainer = DNATrainer.__new__(DNATrainer)
+        trainer.user_id = 'test-user'
+
+        query = MagicMock()
+        query.upsert.return_value = query
+        query.execute.return_value = MagicMock(data=[{'id': 'row-1'}])
+
+        supabase = MagicMock()
+        supabase.table.return_value = query
+        trainer.supabase = supabase
+
+        insight_data = {
+            'peak_hours': [],
+            'best_session_length': {'avg_minutes': 25},
+            'worst_patterns': [],
+            'insights': [],
+            'heatmap_data': [{'hour': 10, 'day': 0, 'quality': 73, 'count': 2}],
+        }
+
+        trainer._save_results(
+            profiles=[{'cluster_id': 0, 'name': 'Deep Focus'}],
+            assignments={'s1': 0},
+            insight_data=insight_data,
+            k=1,
+            n_sessions=1,
+        )
+
+        payload = query.upsert.call_args[0][0]
+        assert 'heatmap_data' in payload
+        assert payload['heatmap_data'] == insight_data['heatmap_data']
+
+
 # Run tests
 # pytest tests/test_dna.py -v
