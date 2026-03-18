@@ -178,7 +178,9 @@ function handleWindowMessage(event) {
   if (
     message.action !== 'startSession' &&
     message.action !== 'endSession' &&
-    message.action !== 'refreshBlocklist'
+    message.action !== 'refreshBlocklist' &&
+    message.action !== 'notifyBreakStarted' &&
+    message.action !== 'notifyBreakEnded'
   ) return;
 
   console.log('FocusPilot: Forwarding message to background:', message.action, message.sessionId);

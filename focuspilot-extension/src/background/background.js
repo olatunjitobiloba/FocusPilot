@@ -141,6 +141,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  else if (message.action === 'notifyBreakStarted') {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('assets/icon128.png'),
+      title: 'FocusPilot Break Started',
+      message: 'Break time has started. Blocked sites are temporarily unblocked.'
+    });
+    sendResponse({ success: true });
+    return false;
+  }
+
+  else if (message.action === 'notifyBreakEnded') {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('assets/icon128.png'),
+      title: 'FocusPilot Break Ended',
+      message: 'Break is over. Returning to focus mode now.'
+    });
+    sendResponse({ success: true });
+    return false;
+  }
 });
 
 // START SESSION
@@ -341,6 +363,13 @@ async function checkBlockCommands() {
     });
 
     if (!response.ok) {
+      // Silently ignore 503s; the backend will be retried in 30s
+      if (response.status === 503) {
+        logActivityFailureThrottled(
+          'Block state check temporarily unavailable (503). Will retry automatically.'
+        );
+        return;
+      }
       throw new Error(`API error: ${response.status}`);
     }
 
@@ -351,7 +380,10 @@ async function checkBlockCommands() {
         unblock_at: data.unblock_at || null,
       });
     } else {
-      await deactivateSiteBlock();
+      await deactivateSiteBlock({
+        preserveSessionRules: Boolean(activeSession),
+        token,
+      });
     }
   } catch (error) {
     console.error('Block command check error:', error);
@@ -424,7 +456,16 @@ async function activateSiteBlock(data) {
   console.log(`FocusFlow: Blocking ${domains.length} sites`);
 }
 
-async function deactivateSiteBlock() {
+async function deactivateSiteBlock(options = {}) {
+  const { preserveSessionRules = false, token = null } = options;
+
+  if (preserveSessionRules && activeSession) {
+    // Keep session-level blocking active even when agent-level block state is idle.
+    await refreshBlocklistRules(token);
+    console.log('FocusFlow: Agent unblock ignored because session blocking is active');
+    return;
+  }
+
   const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
   const hadRules = currentRules.length > 0;
 
@@ -523,6 +564,22 @@ async function removeBlockingRules() {
 let activityInterval;
 let currentUrl = '';
 let urlStartTime = Date.now();
+let activityLogSuppressedUntil = 0;
+const ACTIVITY_LOG_ERROR_COOLDOWN_MS = 120000;
+
+function logActivityFailureThrottled(message, details) {
+  const now = Date.now();
+  if (now < activityLogSuppressedUntil) {
+    return;
+  }
+
+  activityLogSuppressedUntil = now + ACTIVITY_LOG_ERROR_COOLDOWN_MS;
+  if (details !== undefined) {
+    console.warn(message, details);
+  } else {
+    console.warn(message);
+  }
+}
 
 function startActivityMonitoring() {
   console.log('Starting activity monitoring');
@@ -578,19 +635,26 @@ async function logCurrentActivity() {
   if (!activeSession || !currentUrl) return;
   
   const duration = Math.floor((Date.now() - urlStartTime) / 1000);
-  
+
   if (duration < 5) return; // Ignore very short visits (<5 seconds)
-  
+
+  let shouldAdvanceStartTime = true;
+
   try {
     const url = new URL(currentUrl);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      urlStartTime = Date.now();
+      return;
+    }
+
     const domain = url.hostname;
     const token = await getToken();
     const apiUrl = await getApiUrl();
-    
+
     if (!token) return;
-    
+
     console.log('Logging activity:', domain, duration, 'seconds');
-    
+
     const response = await fetch(`${apiUrl}/sessions/${activeSession}/activity`, {
       method: 'POST',
       headers: {
@@ -603,18 +667,29 @@ async function logCurrentActivity() {
         duration_seconds: duration
       })
     });
-    
+
     if (!response.ok) {
-      console.error('Failed to log activity:', response.status);
+      shouldAdvanceStartTime = false;
+      if (response.status === 503) {
+        logActivityFailureThrottled(
+          'Activity logging temporarily unavailable (503). Will retry automatically.'
+        );
+      } else {
+        logActivityFailureThrottled('Failed to log activity:', response.status);
+      }
     } else {
+      activityLogSuppressedUntil = 0;
       console.log('Activity logged successfully');
     }
-    
+
   } catch (error) {
-    console.error('Error logging activity:', error);
+    shouldAdvanceStartTime = false;
+    logActivityFailureThrottled('Error logging activity:', error);
   }
-  
-  urlStartTime = Date.now();
+
+  if (shouldAdvanceStartTime) {
+    urlStartTime = Date.now();
+  }
 }
 
 // GET BLOCKLIST
