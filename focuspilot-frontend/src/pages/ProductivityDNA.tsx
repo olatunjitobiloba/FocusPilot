@@ -12,6 +12,7 @@ function ProductivityDNA() {
   const [loading,  setLoading]  = useState(true);
   const [training, setTraining] = useState(false);
   const [error,    setError]    = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [eligibility, setEligibility] = useState<DNAEligibility | null>(null);
 
   useEffect(() => { loadDNA(); }, []);
@@ -24,8 +25,12 @@ function ProductivityDNA() {
     try {
       const res = await dnaAPI.getResults();
       setDna(res.data);
+      setLoadError(null);
+      return res.data;
     } catch (err) {
       console.error('DNA load error:', err);
+      setLoadError('Could not load saved DNA results right now. Please retry.');
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -35,8 +40,21 @@ function ProductivityDNA() {
     setTraining(true);
     setError(null);
     try {
-      await dnaAPI.train();
-      await Promise.all([loadDNA(), loadEligibility()]);
+      const trainRes = await dnaAPI.train();
+      // Show fresh analysis immediately, even if follow-up /results fetch is transiently down.
+      if (trainRes?.data?.n_clusters) {
+        setDna({ ...trainRes.data, trained: true } as DNAResult);
+        setLoadError(null);
+      }
+
+      try {
+        await loadDNA();
+      } catch {
+        // Preserve successful training payload above; a failed reload should not
+        // bounce the UI back to the not-trained state.
+      }
+
+      await loadEligibility();
     } catch (err: any) {
       setError(
         err.response?.data?.detail ||
@@ -104,8 +122,27 @@ function ProductivityDNA() {
           </div>
         )}
 
-        {/* Not trained yet */}
-        {!dna?.trained ? (
+        {loadError && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-amber-800 text-sm flex items-center justify-between gap-3">
+            <span>{loadError}</span>
+            <button
+              onClick={() => {
+                setLoading(true);
+                loadDNA();
+              }}
+              className="px-3 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-semibold text-xs"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!dna && !loading ? (
+          <div className="bg-white rounded-xl shadow p-8 text-center">
+            <p className="text-gray-700 font-medium">DNA results are temporarily unavailable.</p>
+            <p className="text-gray-500 text-sm mt-2">Try reloading this page in a few seconds.</p>
+          </div>
+        ) : !dna?.trained ? (
           <NotTrainedState
             onTrain={handleTrain}
             training={training}
@@ -274,7 +311,7 @@ function NotTrainedState({
         Your DNA is Ready to Analyze
       </h2>
       <p className="text-gray-500 max-w-md mx-auto mb-8 leading-relaxed">
-        Complete at least 5 focus sessions and FocusFlow will analyze
+        Complete at least 5 focus sessions and FocusPilot will analyze
         your behavioral patterns using K-Means clustering to find your
         unique Productivity DNA.
       </p>
