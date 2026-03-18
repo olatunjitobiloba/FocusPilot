@@ -6,6 +6,7 @@ import { DNAResult, ClusterProfile, DNAInsight, HeatmapCell, DNAEligibility } fr
 
 const DAYS   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS  = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+const DNA_CACHE_KEY = 'focuspilot_dna_cache_v1';
 
 function ProductivityDNA() {
   const [dna,      setDna]      = useState<DNAResult | null>(null);
@@ -18,6 +19,20 @@ function ProductivityDNA() {
   useEffect(() => { loadDNA(); }, []);
 
   useEffect(() => {
+    const cached = localStorage.getItem(DNA_CACHE_KEY);
+    if (!cached) return;
+    try {
+      const parsed = JSON.parse(cached);
+      if (parsed && typeof parsed === 'object') {
+        setDna(parsed as DNAResult);
+        setLoading(false);
+      }
+    } catch {
+      localStorage.removeItem(DNA_CACHE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
     loadEligibility();
   }, []);
 
@@ -25,10 +40,26 @@ function ProductivityDNA() {
     try {
       const res = await dnaAPI.getResults();
       setDna(res.data);
+      try {
+        localStorage.setItem(DNA_CACHE_KEY, JSON.stringify(res.data));
+      } catch {
+        // Ignore cache write failures.
+      }
       setLoadError(null);
       return res.data;
     } catch (err) {
       console.error('DNA load error:', err);
+      const cached = localStorage.getItem(DNA_CACHE_KEY);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && typeof parsed === 'object') {
+            setDna(parsed as DNAResult);
+          }
+        } catch {
+          localStorage.removeItem(DNA_CACHE_KEY);
+        }
+      }
       if (showLoadError) {
         setLoadError('Could not load saved DNA results right now. Please retry.');
       }
@@ -46,6 +77,11 @@ function ProductivityDNA() {
       // Show fresh analysis immediately, even if follow-up /results fetch is transiently down.
       if (trainRes?.data?.n_clusters) {
         setDna({ ...trainRes.data, trained: true } as DNAResult);
+        try {
+          localStorage.setItem(DNA_CACHE_KEY, JSON.stringify({ ...trainRes.data, trained: true }));
+        } catch {
+          // Ignore cache write failures.
+        }
         setLoadError(null);
       }
 
