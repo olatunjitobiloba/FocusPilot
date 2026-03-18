@@ -271,4 +271,7 @@ export const dnaAPI = {
 
   getClusters: () =>
     api.get('/dna/clusters'),
+
+  getEligibility: () =>
+    api.get('/dna/eligibility'),
 };

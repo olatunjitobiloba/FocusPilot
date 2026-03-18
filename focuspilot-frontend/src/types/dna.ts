@@ -40,3 +40,12 @@ export interface DNAResult {
   heatmap_data:        HeatmapCell[];
   trained_at:          string;
 }
+
+export interface DNAEligibility {
+  can_train: boolean;
+  required_sessions: number;
+  completed_sessions: number;
+  remaining_sessions: number;
+  total_sessions: number;
+  days_of_data: number;
+}

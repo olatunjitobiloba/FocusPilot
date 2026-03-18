@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import { dnaAPI } from '../api/client';
-import { DNAResult, ClusterProfile, DNAInsight, HeatmapCell } from '../types/dna';
+import { DNAResult, ClusterProfile, DNAInsight, HeatmapCell, DNAEligibility } from '../types/dna';
 
 const DAYS   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS  = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
@@ -12,8 +12,13 @@ function ProductivityDNA() {
   const [loading,  setLoading]  = useState(true);
   const [training, setTraining] = useState(false);
   const [error,    setError]    = useState<string | null>(null);
+  const [eligibility, setEligibility] = useState<DNAEligibility | null>(null);
 
   useEffect(() => { loadDNA(); }, []);
+
+  useEffect(() => {
+    loadEligibility();
+  }, []);
 
   const loadDNA = async () => {
     try {
@@ -39,6 +44,16 @@ function ProductivityDNA() {
       );
     } finally {
       setTraining(false);
+      loadEligibility();
+    }
+  };
+
+  const loadEligibility = async () => {
+    try {
+      const res = await dnaAPI.getEligibility();
+      setEligibility(res.data);
+    } catch (err) {
+      console.error('DNA eligibility load error:', err);
     }
   };
 
@@ -92,7 +107,11 @@ function ProductivityDNA() {
 
         {/* Not trained yet */}
         {!dna?.trained ? (
-          <NotTrainedState onTrain={handleTrain} training={training} />
+          <NotTrainedState
+            onTrain={handleTrain}
+            training={training}
+            eligibility={eligibility}
+          />
         ) : (
           <>
             {/* Stats row */}
@@ -242,10 +261,12 @@ function ProductivityDNA() {
 
 function NotTrainedState({
   onTrain,
-  training
+  training,
+  eligibility
 }: {
   onTrain: () => void;
   training: boolean;
+  eligibility: DNAEligibility | null;
 }) {
   return (
     <div className="text-center py-20">
@@ -267,6 +288,32 @@ function NotTrainedState({
       >
         {training ? 'Analyzing your sessions...' : 'Analyze My DNA'}
       </button>
+
+      <div className="mt-6 max-w-xl mx-auto rounded-xl border border-gray-200 bg-white p-4 text-left">
+        <p className="text-sm font-semibold text-gray-800 mb-2">DNA Eligibility Check</p>
+        {!eligibility ? (
+          <p className="text-sm text-gray-500">Checking your session data...</p>
+        ) : (
+          <>
+            <p className="text-sm text-gray-700">
+              Completed sessions: <span className="font-semibold">{eligibility.completed_sessions}</span>
+              {' / '}
+              <span className="font-semibold">{eligibility.required_sessions}</span>
+            </p>
+            <p className="text-sm text-gray-700 mt-1">
+              Total sessions: <span className="font-semibold">{eligibility.total_sessions}</span>
+              {' · '}
+              Days tracked: <span className="font-semibold">{eligibility.days_of_data}</span>
+            </p>
+            <p className="text-sm mt-2 font-medium text-gray-800">
+              {eligibility.can_train
+                ? 'You have enough completed sessions. DNA training should work now.'
+                : `You need ${eligibility.remaining_sessions} more completed session${eligibility.remaining_sessions === 1 ? '' : 's'} to train DNA.`}
+            </p>
+          </>
+        )}
+      </div>
+
       <div className="mt-8 grid grid-cols-3 gap-6 max-w-lg mx-auto">
         {[
           { icon: 'Search', label: 'Finds your focus patterns' },
