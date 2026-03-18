@@ -2,13 +2,14 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import { agentAPI } from '../api/client';
+import AppIcon, { IconName } from '../components/AppIcon';
 
 const STATE_CONFIG = {
-  idle:        { color: 'bg-gray-100  text-gray-700',  icon: '',   label: 'Idle'        },
-  active:      { color: 'bg-green-100 text-green-700', icon: '',   label: 'Active'       },
-  at_risk:     { color: 'bg-yellow-100 text-yellow-700',icon: '',  label: 'At Risk'     },
-  intervening: { color: 'bg-red-100   text-red-700',   icon: '',   label: 'Intervening'  },
-  paused:      { color: 'bg-blue-100  text-blue-700',  icon: '',   label: 'Paused'       }
+  idle:        { color: 'bg-gray-100  text-gray-700',   icon: 'event' as IconName,        label: 'Idle'        },
+  active:      { color: 'bg-green-100 text-green-700',  icon: 'activity' as IconName,     label: 'Active'       },
+  at_risk:     { color: 'bg-yellow-100 text-yellow-700',icon: 'warning' as IconName,      label: 'At Risk'     },
+  intervening: { color: 'bg-red-100   text-red-700',    icon: 'intervention' as IconName, label: 'Intervening'  },
+  paused:      { color: 'bg-blue-100  text-blue-700',   icon: 'pause' as IconName,        label: 'Paused'       }
 };
 
 const stripEmoji = (value: string | undefined | null): string => {
@@ -196,7 +197,7 @@ function AgentStatus() {
           <div className="bg-white rounded-xl shadow p-5 col-span-2">
             <p className="text-sm text-gray-500 mb-2">Agent State</p>
             <div className="flex items-center gap-3">
-              <span className="text-4xl">{stateConfig.icon}</span>
+              <AppIcon name={stateConfig.icon} className="text-gray-600" size={30} />
               <div>
                 <span className={`px-3 py-1 rounded-full text-sm font-bold ${stateConfig.color}`}>
                   {stateConfig.label}
@@ -247,9 +248,11 @@ function AgentStatus() {
             ? 'bg-green-50 border border-green-200'
             : 'bg-red-50 border border-red-200'
         }`}>
-          <span className="text-2xl">
-            {status?.orchestrator_running ? '(on)' : '(off)'}
-          </span>
+          <AppIcon
+            name={status?.orchestrator_running ? 'check-circle' : 'x-circle'}
+            className={status?.orchestrator_running ? 'text-green-700' : 'text-red-700'}
+            size={22}
+          />
           <div>
             <p className={`font-semibold ${
               status?.orchestrator_running
@@ -300,7 +303,9 @@ function AgentStatus() {
           <div className="space-y-3">
             {events.length === 0 ? (
               <div className="text-center py-16">
-                <span className="text-5xl mb-4 block"></span>
+                <div className="flex justify-center mb-4">
+                  <AppIcon name="event" className="text-gray-300" size={42} />
+                </div>
                 <p className="text-gray-500 text-lg">No events yet.</p>
                 <p className="text-gray-400 text-sm mt-1">
                   Start a session and the agent will begin monitoring.
@@ -319,7 +324,9 @@ function AgentStatus() {
           <div className="space-y-3">
             {interventions.length === 0 ? (
               <div className="text-center py-16">
-                <span className="text-5xl mb-4 block"></span>
+                <div className="flex justify-center mb-4">
+                  <AppIcon name="check-circle" className="text-gray-300" size={42} />
+                </div>
                 <p className="text-gray-500 text-lg">No interventions yet.</p>
                 <p className="text-gray-400 text-sm mt-1">
                   Great! The agent has not needed to intervene.
@@ -339,7 +346,7 @@ function AgentStatus() {
 }
 
 function EventCard({ event }: { event: any }) {
-  const typeIcons: Record<string, string> = {
+  const typeIcons: Record<string, IconName> = {
     monitoring_cycle: 'cycle',
     alert_warning: 'warning',
     alert_intervention: 'intervention',
@@ -350,7 +357,7 @@ function EventCard({ event }: { event: any }) {
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-4 flex items-start gap-4">
-      <span className="text-xs font-medium text-gray-400 mt-0.5 uppercase">{icon}</span>
+      <AppIcon name={icon} className="text-gray-400 mt-0.5" size={16} />
       <div className="flex-1">
         <div className="flex justify-between items-start">
           <p className="font-semibold text-gray-900 capitalize text-sm">
@@ -389,7 +396,7 @@ function InterventionCard({ intervention }: { intervention: any }) {
     <div className="bg-white rounded-lg shadow-sm p-4">
       <div className="flex justify-between items-start mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-400 uppercase">alert</span>
+          <AppIcon name="warning" className="text-gray-400" size={14} />
           <p className="font-semibold text-gray-900 capitalize text-sm">
             {intervention.intervention_type?.replace(/_/g, ' ')}
           </p>

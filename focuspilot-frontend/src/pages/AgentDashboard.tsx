@@ -11,12 +11,13 @@ import {
   ReferenceLine
 } from 'recharts';
 import { pipelineAPI } from '../api/client';
+import AppIcon, { IconName } from '../components/AppIcon';
 
-const COMPONENT_CONFIG: Record<string, { icon: string; label: string }> = {
-  orchestrator: { icon: '', label: 'Orchestrator' },
-  ml_model: { icon: '', label: 'ML Model' },
-  active_session: { icon: '', label: 'Session' },
-  site_blocker: { icon: '', label: 'Site Blocker' }
+const COMPONENT_CONFIG: Record<string, { icon: IconName; label: string }> = {
+  orchestrator: { icon: 'cpu', label: 'Orchestrator' },
+  ml_model: { icon: 'brain', label: 'ML Model' },
+  active_session: { icon: 'activity', label: 'Session' },
+  site_blocker: { icon: 'lock', label: 'Site Blocker' }
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -173,7 +174,11 @@ function AgentDashboard() {
             : 'bg-orange-50 border-orange-200'
           }`}
         >
-          <span className="text-3xl">{health?.overall_status === 'healthy' ? '' : ''}</span>
+          <AppIcon
+            name={health?.overall_status === 'healthy' ? 'shield-check' : 'shield-x'}
+            className={health?.overall_status === 'healthy' ? 'text-green-700' : 'text-orange-700'}
+            size={30}
+          />
           <div>
             <p
               className={`font-bold text-lg ${
@@ -199,7 +204,7 @@ function AgentDashboard() {
         {/* Component health grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {Object.entries(components).map(([key, comp]: [string, any]) => {
-            const cfg = COMPONENT_CONFIG[key] || { icon: '', label: key };
+            const cfg = COMPONENT_CONFIG[key] || { icon: 'event' as IconName, label: key };
             const status = typeof comp?.status === 'string' ? comp.status : 'idle';
             const description = typeof comp?.description === 'string' ? comp.description : 'No details available';
             const colors = STATUS_COLORS[status] || STATUS_COLORS.idle;
@@ -207,7 +212,7 @@ function AgentDashboard() {
             return (
               <div key={key} className={`bg-white rounded-xl border p-4 ${colors}`}>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-2xl">{cfg.icon}</span>
+                  <AppIcon name={cfg.icon} size={20} />
                   <p className="font-semibold text-sm">{cfg.label}</p>
                 </div>
                 <p className="text-xs capitalize font-medium">{status.replace(/_/g, ' ')}</p>
@@ -220,25 +225,25 @@ function AgentDashboard() {
         {/* Today's stats row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard
-            icon=""
+            icon="chart"
             label="Cycles Today"
             value={summary?.total_cycles || 0}
             color="text-blue-600"
           />
           <StatCard
-            icon=""
+            icon="warning"
             label="Interventions"
             value={health?.today?.interventions || 0}
             color="text-orange-600"
           />
           <StatCard
-            icon=""
+            icon="bolt"
             label="Actions Taken"
             value={health?.today?.autonomous_actions || 0}
             color="text-purple-600"
           />
           <StatCard
-            icon=""
+            icon="trend-up"
             label="Peak Risk Today"
             value={`${Math.round((summary?.peak_risk_today || 0) * 100)}%`}
             color="text-red-600"
@@ -251,7 +256,9 @@ function AgentDashboard() {
 
           {riskTimeline.length === 0 ? (
             <div className="text-center py-12">
-              <span className="text-4xl block mb-3"></span>
+              <div className="flex justify-center mb-3">
+                <AppIcon name="chart" className="text-gray-300" size={36} />
+              </div>
               <p className="text-gray-500">No risk data yet. Start a session to begin monitoring.</p>
             </div>
           ) : (
@@ -333,7 +340,9 @@ function AgentDashboard() {
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {(summary?.interventions || []).length === 0 ? (
                 <div className="text-center py-8">
-                  <span className="text-3xl block mb-2"></span>
+                  <div className="flex justify-center mb-2">
+                    <AppIcon name="check-circle" className="text-gray-300" size={28} />
+                  </div>
                   <p className="text-gray-400 text-sm">No interventions today. Great focus!</p>
                 </div>
               ) : (
@@ -355,7 +364,7 @@ function StatCard({
   value,
   color
 }: {
-  icon: string;
+  icon: IconName;
   label: string;
   value: any;
   color: string;
@@ -363,7 +372,7 @@ function StatCard({
   return (
     <div className="bg-white rounded-xl shadow p-5">
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-xl">{icon}</span>
+        <AppIcon name={icon} className="text-gray-500" size={18} />
         <p className="text-sm text-gray-500">{label}</p>
       </div>
       <p className={`text-3xl font-bold ${color}`}>{value}</p>
@@ -372,21 +381,21 @@ function StatCard({
 }
 
 function EventRow({ event }: { event: any }) {
-  const typeIcons: Record<string, string> = {
-    pipeline_cycle: '',
-    alert_warning: '',
-    alert_intervention: '',
-    alert_recovery: '',
-    monitoring_cycle: ''
+  const typeIcons: Record<string, IconName> = {
+    pipeline_cycle: 'cycle',
+    alert_warning: 'warning',
+    alert_intervention: 'intervention',
+    alert_recovery: 'recovery',
+    monitoring_cycle: 'activity'
   };
 
   const eventType = typeof event?.event_type === 'string' ? event.event_type : 'unknown_event';
-  const icon = typeIcons[eventType] || '';
+  const icon = typeIcons[eventType] || 'event';
   const createdAt = event?.created_at ? new Date(event.created_at) : null;
 
   return (
     <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-      <span className="text-base mt-0.5">{icon}</span>
+      <AppIcon name={icon} className="text-gray-400 mt-0.5" size={16} />
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
           <p className="text-xs font-medium text-gray-700 capitalize truncate">
@@ -426,7 +435,7 @@ function InterventionRow({ intervention }: { intervention: any }) {
 
   return (
     <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-      <span className="text-base mt-0.5"></span>
+      <AppIcon name="warning" className="text-gray-400 mt-0.5" size={16} />
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
           <p className="text-xs font-medium text-gray-700 capitalize truncate">

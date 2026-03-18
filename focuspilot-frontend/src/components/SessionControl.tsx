@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api, settingsAPI } from '../api/client';
+import AppIcon from './AppIcon';
 
 interface SessionControlProps {
   onSessionEnd: () => void; // callback to refresh dashboard stats
@@ -710,8 +711,9 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
       {/* Orphaned Session Alert */}
       {(showOrphanOptions || hasActiveSessionConflict) && !isRunning && (
         <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-4">
-          <p className="text-sm font-semibold text-yellow-800 mb-3">
-            ⚠ Active Session Found
+          <p className="text-sm font-semibold text-yellow-800 mb-3 flex items-center gap-2">
+            <AppIcon name="warning" className="text-yellow-700" size={16} />
+            Active Session Found
           </p>
           <p className="text-xs text-yellow-700 mb-4">
             {orphanedSession

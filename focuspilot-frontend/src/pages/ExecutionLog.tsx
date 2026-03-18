@@ -2,17 +2,18 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import { executionAPI } from '../api/client';
 import { AgentAction, BlockState } from '../types/execution';
+import AppIcon, { IconName } from '../components/AppIcon';
 
 const ACTION_CONFIG: Record<string, {
-	icon: string; color: string; label: string
+	icon: IconName; color: string; label: string
 }> = {
-	block_sites: { icon: '🔒', color: 'text-red-600', label: 'Sites Blocked' },
-	unblock_sites: { icon: '🔓', color: 'text-green-600', label: 'Sites Unblocked' },
-	start_session: { icon: '▶️', color: 'text-blue-600', label: 'Session Started' },
-	end_session: { icon: '⏹️', color: 'text-orange-600', label: 'Session Ended' },
-	send_nudge: { icon: '📢', color: 'text-purple-600', label: 'Nudge Sent' },
-	schedule_nudge: { icon: '⏰', color: 'text-yellow-600', label: 'Nudge Scheduled' },
-	activate_focus_mode: { icon: '🎯', color: 'text-indigo-600', label: 'Focus Mode' }
+	block_sites: { icon: 'lock', color: 'text-red-600', label: 'Sites Blocked' },
+	unblock_sites: { icon: 'unlock', color: 'text-green-600', label: 'Sites Unblocked' },
+	start_session: { icon: 'play', color: 'text-blue-600', label: 'Session Started' },
+	end_session: { icon: 'stop', color: 'text-orange-600', label: 'Session Ended' },
+	send_nudge: { icon: 'megaphone', color: 'text-purple-600', label: 'Nudge Sent' },
+	schedule_nudge: { icon: 'clock', color: 'text-yellow-600', label: 'Nudge Scheduled' },
+	activate_focus_mode: { icon: 'target', color: 'text-indigo-600', label: 'Focus Mode' }
 };
 
 const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
@@ -105,8 +106,9 @@ function ExecutionLog() {
 				{/* Header */}
 				<div className="flex justify-between items-center mb-8">
 					<div>
-						<h1 className="text-3xl font-bold text-gray-900">
-							⚡ Execution Log
+						<h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+							<AppIcon name="bolt" className="text-gray-900" size={30} />
+							Execution Log
 						</h1>
 						<p className="text-gray-600 mt-1">
 							Every autonomous action your agent has taken
@@ -121,7 +123,10 @@ function ExecutionLog() {
 								className="px-4 py-2 bg-green-600 text-white rounded-lg
 									font-medium hover:bg-green-700 transition text-sm"
 							>
-								🔓 Unblock Sites
+								<span className="flex items-center gap-2">
+									<AppIcon name="unlock" size={16} />
+									Unblock Sites
+								</span>
 							</button>
 						) : (
 							<button
@@ -129,7 +134,10 @@ function ExecutionLog() {
 								className="px-4 py-2 bg-red-600 text-white rounded-lg
 									font-medium hover:bg-red-700 transition text-sm"
 							>
-								🔒 Block Sites (25 min)
+								<span className="flex items-center gap-2">
+									<AppIcon name="lock" size={16} />
+									Block Sites (25 min)
+								</span>
 							</button>
 						)}
 					</div>
@@ -140,7 +148,7 @@ function ExecutionLog() {
 					<div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
 						<div className="flex items-center justify-between">
 							<div className="flex items-center gap-3">
-								<span className="text-2xl">🔒</span>
+								<AppIcon name="lock" className="text-red-700" size={24} />
 								<div>
 									<p className="font-semibold text-red-800">
 										Focus Mode Active
@@ -188,7 +196,9 @@ function ExecutionLog() {
 				{/* Actions list */}
 				{actions.length === 0 ? (
 					<div className="text-center py-20">
-						<span className="text-6xl block mb-4">⚡</span>
+						<div className="flex justify-center mb-4">
+							<AppIcon name="bolt" className="text-gray-300" size={56} />
+						</div>
 						<p className="text-gray-500 text-xl">No actions yet.</p>
 						<p className="text-gray-400 text-sm mt-2">
 							The agent will take autonomous actions when it detects
@@ -222,7 +232,7 @@ function ActionCard({
 	undoing: boolean;
 }) {
 	const actionCfg = ACTION_CONFIG[action.action_type] || {
-		icon: '⚡', color: 'text-gray-600', label: action.action_type
+		icon: 'bolt' as IconName, color: 'text-gray-600', label: action.action_type
 	};
 	const statusCfg = STATUS_CONFIG[action.status] || STATUS_CONFIG.pending;
 
@@ -231,7 +241,7 @@ function ActionCard({
 			<div className="flex items-start justify-between">
 				{/* Left: icon + info */}
 				<div className="flex items-start gap-4">
-					<span className="text-3xl mt-0.5">{actionCfg.icon}</span>
+					<AppIcon name={actionCfg.icon} className={actionCfg.color} size={28} />
 					<div>
 						<div className="flex items-center gap-2 mb-1">
 							<p className={`font-bold text-base ${actionCfg.color}`}>
@@ -288,7 +298,12 @@ function ActionCard({
 							text-gray-600 rounded-lg hover:bg-gray-50
 							disabled:opacity-50 transition font-medium shrink-0"
 					>
-						{undoing ? '...' : '↩ Undo'}
+						{undoing ? '...' : (
+							<span className="flex items-center gap-1.5">
+								<AppIcon name="undo" size={14} />
+								Undo
+							</span>
+						)}
 					</button>
 				)}
 			</div>

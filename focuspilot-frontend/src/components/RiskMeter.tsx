@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { predictionsAPI } from '../api/client';
 import { RiskPrediction } from '../types/predictions';
+import AppIcon, { IconName } from './AppIcon';
 
 const FALLBACK_RISK: RiskPrediction = {
   risk_score: 0,
@@ -54,11 +55,11 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
   const safeRisk = risk || FALLBACK_RISK;
 
   // ── Color scheme by risk level ─────────────────────────────────────
-  const colors = {
-    low:      { bg: 'bg-green-50',  border: 'border-green-200', text: 'text-green-700',  bar: 'bg-green-500',  icon: '' },
-    medium:   { bg: 'bg-yellow-50', border: 'border-yellow-200',text: 'text-yellow-700', bar: 'bg-yellow-500', icon: '' },
-    high:     { bg: 'bg-orange-50', border: 'border-orange-200',text: 'text-orange-700', bar: 'bg-orange-500', icon: '' },
-    critical: { bg: 'bg-red-50',    border: 'border-red-200',   text: 'text-red-700',    bar: 'bg-red-500',    icon: '' }
+  const colors: Record<string, { bg: string; border: string; text: string; bar: string; icon: IconName }> = {
+    low:      { bg: 'bg-green-50',  border: 'border-green-200', text: 'text-green-700',  bar: 'bg-green-500',  icon: 'check-circle' },
+    medium:   { bg: 'bg-yellow-50', border: 'border-yellow-200',text: 'text-yellow-700', bar: 'bg-yellow-500', icon: 'info' },
+    high:     { bg: 'bg-orange-50', border: 'border-orange-200',text: 'text-orange-700', bar: 'bg-orange-500', icon: 'warning' },
+    critical: { bg: 'bg-red-50',    border: 'border-red-200',   text: 'text-red-700',    bar: 'bg-red-500',    icon: 'intervention' }
   };
 
   const c = colors[safeRisk.risk_level] || colors.low;
@@ -69,8 +70,9 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
     return (
       <div className={`${cardShellClass} rounded-lg p-3`}>
         <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-semibold text-gray-900">
-            {c.icon} Procrastination Risk
+          <span className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+            <AppIcon name={c.icon} className={c.text} size={14} />
+            Procrastination Risk
           </span>
           <span className={`text-lg font-bold ${c.text}`}>
             {safeRisk.risk_percentage}%
@@ -97,8 +99,9 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
       {/* Header */}
       <div className="flex justify-between items-start mb-4">
         <div>
-          <h3 className="text-lg font-bold text-gray-900">
-            {c.icon} Procrastination Risk
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <AppIcon name={c.icon} className={c.text} size={18} />
+            Procrastination Risk
           </h3>
           <p className="text-sm text-gray-500 mt-0.5">
             {safeRisk.model_available
@@ -148,10 +151,17 @@ function RiskMeter({ compact = false, autoRefresh = false }: RiskMeterProps) {
                 key={i}
                 className="flex items-start gap-2 text-sm"
               >
-                <span className="mt-0.5">
-                  {factor.severity === 'high'   ? '[H]' :
-                   factor.severity === 'medium' ? '[M]' : '[L]'}
-                </span>
+                <AppIcon
+                  name={
+                    factor.severity === 'high'
+                      ? 'warning'
+                      : factor.severity === 'medium'
+                        ? 'info'
+                        : 'check-circle'
+                  }
+                  className="mt-0.5 text-gray-500"
+                  size={14}
+                />
                 <div>
                   <span className="font-medium text-gray-800">
                     {factor.factor}:

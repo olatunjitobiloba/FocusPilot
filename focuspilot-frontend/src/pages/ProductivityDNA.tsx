@@ -3,10 +3,39 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import { dnaAPI } from '../api/client';
 import { DNAResult, ClusterProfile, DNAInsight, HeatmapCell, DNAEligibility } from '../types/dna';
+import AppIcon, { IconName } from '../components/AppIcon';
 
 const DAYS   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS  = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
 const DNA_CACHE_KEY = 'focuspilot_dna_cache_v1';
+const LEGACY_EMOJI_ICON_MAP: Record<string, IconName> = {
+  '\u{1F4C5}': 'clock',
+  '\u{1F4A1}': 'lightbulb',
+  '\u{1F3AF}': 'target',
+  '\u26A0\uFE0F': 'warning',
+  '\u26A0': 'warning',
+  '\u2705': 'check-circle',
+  '\u{1F525}': 'spark',
+  '\u2B50': 'spark',
+  '\u{1F4F1}': 'activity'
+};
+
+const normalizeIconName = (iconValue?: string | null): IconName => {
+  const icon = (iconValue || '').toLowerCase().trim();
+  const legacyIcon = LEGACY_EMOJI_ICON_MAP[iconValue || ''];
+  if (legacyIcon) return legacyIcon;
+
+  if (icon.includes('search')) return 'search';
+  if (icon.includes('clock') || icon.includes('calendar')) return 'clock';
+  if (icon.includes('light')) return 'lightbulb';
+  if (icon.includes('target')) return 'target';
+  if (icon.includes('warning')) return 'warning';
+  if (icon.includes('check')) return 'check-circle';
+  if (icon.includes('fire') || icon.includes('star')) return 'spark';
+  if (icon.includes('phone')) return 'activity';
+
+  return 'info';
+};
 
 function ProductivityDNA() {
   const [dna,      setDna]      = useState<DNAResult | null>(null);
@@ -390,12 +419,14 @@ function NotTrainedState({
 
       <div className="mt-8 grid grid-cols-3 gap-6 max-w-lg mx-auto">
         {[
-          { icon: 'Search', label: 'Finds your focus patterns' },
-          { icon: 'Clock', label: 'Discovers your peak hours' },
-          { icon: 'Lightbulb', label: 'Gives personalized tips' }
+          { icon: 'search' as IconName, label: 'Finds your focus patterns' },
+          { icon: 'clock' as IconName, label: 'Discovers your peak hours' },
+          { icon: 'lightbulb' as IconName, label: 'Gives personalized tips' }
         ].map((item, i) => (
           <div key={i} className="text-center">
-            <span className="text-3xl block mb-2">{item.icon}</span>
+            <span className="flex justify-center mb-2">
+              <AppIcon name={item.icon} className="text-indigo-600" size={28} />
+            </span>
             <p className="text-xs text-gray-500">{item.label}</p>
           </div>
         ))}
@@ -621,7 +652,11 @@ function InsightCard({ insight }: { insight: DNAInsight }) {
   return (
     <div className={`rounded-xl border p-4 ${c.bg}`}>
       <div className="flex items-start gap-3">
-        <span className="text-2xl shrink-0">{insight.icon}</span>
+        <AppIcon
+          name={normalizeIconName(insight.icon)}
+          className="shrink-0 text-gray-700"
+          size={20}
+        />
         <div>
           <p className={`font-semibold text-base leading-tight ${c.text}`}>
             {insight.title}
@@ -647,7 +682,11 @@ function WorstPatternCard({ pattern }: { pattern: any }) {
   return (
     <div className={`rounded-xl border p-4 ${c}`}>
       <div className="flex items-start gap-3">
-        <span className="text-xl shrink-0">{pattern.icon}</span>
+        <AppIcon
+          name={normalizeIconName(pattern.icon)}
+          className="shrink-0"
+          size={18}
+        />
         <div>
           <p className="font-semibold text-sm">{pattern.pattern}</p>
           <p className="text-xs opacity-80 mt-0.5 leading-relaxed">
@@ -666,12 +705,12 @@ function PeakHourRow({
   peakHour: any;
   rank: number;
 }) {
-  const medals = ['Gold', 'Silver', 'Bronze'];
+  const medals: IconName[] = ['medal-gold', 'medal-silver', 'medal-bronze'];
 
   return (
     <div className="bg-white rounded-xl border border-gray-100
       shadow-sm p-4 flex items-center gap-4">
-      <span className="text-2xl">{medals[rank - 1] || 'Clock'}</span>
+      <AppIcon name={medals[rank - 1] || 'clock'} className="text-indigo-600" size={22} />
       <div className="flex-1">
         <p className="font-bold text-gray-900 text-sm">
           {peakHour.hour_label}
