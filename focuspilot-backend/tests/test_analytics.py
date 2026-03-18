@@ -5,6 +5,29 @@ Run with: pytest tests/test_analytics.py -v
 """
 
 import pytest
+from datetime import datetime, timedelta
+from unittest.mock import patch, MagicMock
+
+
+def make_mock_sessions(n: int = 10) -> list:
+    """Generate mock session data."""
+    sessions = []
+    base = datetime.utcnow() - timedelta(days=n)
+
+    for i in range(n):
+        start = base + timedelta(days=i, hours=9)
+        end = start + timedelta(minutes=45)
+        sessions.append({
+            'id': f'session-{i}',
+            'user_id': 'test-user',
+            'start_time': start.isoformat(),
+            'end_time': end.isoformat(),
+            'focus_score': float(5 + (i % 5)),
+            'duration_minutes': 45,
+            'auto_started': False
+        })
+
+    return sessions
 
 
 class TestDailyStats:
@@ -178,3 +201,186 @@ class TestRecommendations:
             assert "message"  in rec
             assert "priority" in rec
             assert rec["priority"] in ["high", "medium", "low"]
+
+
+class TestAnalyticsAggregator:
+
+    def test_compute_summary_empty_sessions(self):
+        with patch('app.analytics.aggregator.get_supabase') as mock_sb:
+            mock_sb.return_value = MagicMock()
+            from app.analytics.aggregator import AnalyticsAggregator
+            agg = AnalyticsAggregator('test-user')
+            summary = agg._compute_summary([], [])
+            assert summary['total_sessions'] == 0
+            assert summary['total_focused_hours'] == 0.0
+
+    def test_compute_summary_with_sessions(self):
+        with patch('app.analytics.aggregator.get_supabase') as mock_sb:
+            mock_sb.return_value = MagicMock()
+            from app.analytics.aggregator import AnalyticsAggregator
+            agg = AnalyticsAggregator('test-user')
+            sessions = make_mock_sessions(5)
+            summary = agg._compute_summary(sessions, [])
+            assert summary['total_sessions'] == 5
+            assert summary['total_focused_hours'] > 0
+
+    def test_compute_streak_consecutive_days(self):
+        with patch('app.analytics.aggregator.get_supabase') as mock_sb:
+            mock_sb.return_value = MagicMock()
+            from app.analytics.aggregator import AnalyticsAggregator
+            agg = AnalyticsAggregator('test-user')
+            sessions = make_mock_sessions(7)
+            streak = agg._compute_streak(sessions)
+            assert streak['longest_streak'] >= 1
+
+    def test_compute_streak_empty(self):
+        with patch('app.analytics.aggregator.get_supabase') as mock_sb:
+            mock_sb.return_value = MagicMock()
+            from app.analytics.aggregator import AnalyticsAggregator
+            agg = AnalyticsAggregator('test-user')
+            streak = agg._compute_streak([])
+            assert streak['current_streak'] == 0
+            assert streak['longest_streak'] == 0
+
+    def test_compute_weekly_trend_groups_by_week(self):
+        with patch('app.analytics.aggregator.get_supabase') as mock_sb:
+            mock_sb.return_value = MagicMock()
+            from app.analytics.aggregator import AnalyticsAggregator
+            agg = AnalyticsAggregator('test-user')
+            sessions = make_mock_sessions(14)
+            trend = agg._compute_weekly_trend(sessions)
+            assert len(trend) >= 1
+            assert 'week_label' in trend[0]
+            assert 'avg_score' in trend[0]
+            assert 'total_hours' in trend[0]
+
+    def test_compute_best_day_returns_day_name(self):
+        with patch('app.analytics.aggregator.get_supabase') as mock_sb:
+            mock_sb.return_value = MagicMock()
+            from app.analytics.aggregator import AnalyticsAggregator
+            agg = AnalyticsAggregator('test-user')
+            sessions = make_mock_sessions(10)
+            best_day = agg._compute_best_day(sessions)
+            if best_day:
+                assert 'day_name' in best_day
+                assert 'avg_score' in best_day
+
+    def test_compute_daily_breakdown_length(self):
+        with patch('app.analytics.aggregator.get_supabase') as mock_sb:
+            mock_sb.return_value = MagicMock()
+            from app.analytics.aggregator import AnalyticsAggregator
+            agg = AnalyticsAggregator('test-user')
+            sessions = make_mock_sessions(10)
+            breakdown = agg._compute_daily_breakdown(sessions, 14)
+            assert len(breakdown) == 14
+
+    def test_time_breakdown_categories(self):
+        with patch('app.analytics.aggregator.get_supabase') as mock_sb:
+            mock_sb.return_value = MagicMock()
+            from app.analytics.aggregator import AnalyticsAggregator
+            agg = AnalyticsAggregator('test-user')
+            activity = [
+                {'domain': 'youtube.com', 'duration_seconds': 600},
+                {'domain': 'github.com', 'duration_seconds': 1200},
+                {'domain': 'notion.so', 'duration_seconds': 300}
+            ]
+            breakdown = agg._compute_time_breakdown(activity)
+            names = [c['name'] for c in breakdown['categories']]
+            assert 'Productive' in names
+            assert 'Distraction' in names
+
+    def test_risk_trend_groups_by_date(self):
+        with patch('app.analytics.aggregator.get_supabase') as mock_sb:
+            mock_sb.return_value = MagicMock()
+            from app.analytics.aggregator import AnalyticsAggregator
+            agg = AnalyticsAggregator('test-user')
+            hist = [
+                {'risk_score': 0.4, 'assessed_at': '2026-03-10T09:00:00'},
+                {'risk_score': 0.6, 'assessed_at': '2026-03-10T10:00:00'},
+                {'risk_score': 0.3, 'assessed_at': '2026-03-11T09:00:00'}
+            ]
+            trend = agg._compute_risk_trend(hist)
+            assert len(trend) == 2
+            assert trend[0]['avg_risk'] == pytest.approx(0.5, 0.01)
+
+
+class TestWeeklyReportGenerator:
+
+    def test_report_has_required_keys(self):
+        with patch('app.analytics.report_generator.AnalyticsAggregator') as mock_agg:
+            mock_instance = MagicMock()
+            mock_instance.compute_all.return_value = {
+                'summary': {
+                    'total_sessions': 10,
+                    'total_focused_hours': 7.5,
+                    'avg_focus_score': 7.2,
+                    'completion_rate': 80.0,
+                    'total_distraction_mins': 20.0,
+                    'avg_session_duration': 45.0
+                },
+                'agent_stats': {
+                    'total_interventions': 5,
+                    'intervention_success_rate': 60.0,
+                    'total_actions': 8
+                },
+                'streak': {'current_streak': 3, 'longest_streak': 5},
+                'best_day': {'day_name': 'Monday', 'avg_score': 8.0},
+                'best_hour': {'hour_label': '9:00 AM', 'avg_score': 8.5},
+                'daily_breakdown': []
+            }
+            mock_agg.return_value = mock_instance
+
+            from app.analytics.report_generator import WeeklyReportGenerator
+            gen = WeeklyReportGenerator('test-user')
+            with patch.object(gen, '_compute_last_week', return_value={
+                'total_sessions': 8,
+                'total_focused_hours': 6.0,
+                'avg_focus_score': 6.5,
+                'completion_rate': 70.0
+            }):
+                report = gen.generate()
+
+            required = [
+                'week_label', 'this_week', 'last_week',
+                'improvement', 'achievements', 'recommendations'
+            ]
+            for key in required:
+                assert key in report, f"Missing: {key}"
+
+    def test_improvement_positive_when_score_increases(self):
+        with patch('app.analytics.report_generator.AnalyticsAggregator'):
+            from app.analytics.report_generator import WeeklyReportGenerator
+            gen = WeeklyReportGenerator('test-user')
+            imp = gen._compute_improvement(
+                {
+                    'avg_focus_score': 8.0,
+                    'total_sessions': 10,
+                    'total_focused_hours': 8.0
+                },
+                {
+                    'avg_focus_score': 6.0,
+                    'total_sessions': 8,
+                    'total_focused_hours': 6.0
+                }
+            )
+            assert imp['is_improving'] is True
+            assert imp['score_pct'] > 0
+
+    def test_improvement_negative_when_score_drops(self):
+        with patch('app.analytics.report_generator.AnalyticsAggregator'):
+            from app.analytics.report_generator import WeeklyReportGenerator
+            gen = WeeklyReportGenerator('test-user')
+            imp = gen._compute_improvement(
+                {
+                    'avg_focus_score': 5.0,
+                    'total_sessions': 5,
+                    'total_focused_hours': 4.0
+                },
+                {
+                    'avg_focus_score': 8.0,
+                    'total_sessions': 10,
+                    'total_focused_hours': 8.0
+                }
+            )
+            assert imp['is_improving'] is False
+            assert imp['score_pct'] < 0
