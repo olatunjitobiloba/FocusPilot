@@ -236,6 +236,29 @@ export const pipelineAPI = {
     api.post('/pipeline/run'),
 };
 
+export const analyticsAPI = {
+  getOverview: (days = 30) =>
+    api.get(`/analytics/overview?days=${days}`),
+
+  getSummary: (days = 7) =>
+    api.get(`/analytics/summary?days=${days}`),
+
+  getTrends: (days = 30) =>
+    api.get(`/analytics/trends?days=${days}`),
+
+  getTimeBreakdown: (days = 30) =>
+    api.get(`/analytics/time-breakdown?days=${days}`),
+
+  getSessions: (days = 30) =>
+    api.get(`/analytics/sessions?days=${days}`),
+
+  getWeeklyReport: () =>
+    api.get('/analytics/weekly-report'),
+
+  getAgentStats: (days = 30) =>
+    api.get(`/analytics/agent-stats?days=${days}`),
+};
+
 export const dnaAPI = {
   train: () =>
     api.post('/dna/train/sync'),

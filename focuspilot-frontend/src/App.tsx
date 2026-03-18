@@ -11,6 +11,7 @@ import Blocklist from './pages/Blocklist';
 import Settings  from './pages/Settings';
 import ExecutionLog from './pages/ExecutionLog';
 import ProductivityDNA from './pages/ProductivityDNA';
+import Analytics from './pages/Analytics';
 import { applyTheme, getStoredTheme } from './utils/theme';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -69,6 +70,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ProductivityDNA />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute>
+              <Analytics />
             </ProtectedRoute>
           }
         />

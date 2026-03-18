@@ -73,6 +73,11 @@ function Navbar() {
       ? 'text-green-600 border-b-2 border-green-600'
       : 'text-gray-600 hover:text-gray-900';
 
+  const getAnalyticsClass = () =>
+    location.pathname === '/analytics'
+      ? 'text-green-600 border-b-2 border-green-600'
+      : 'text-gray-600 hover:text-gray-900';
+
   const user = safeParseUser(localStorage.getItem('user')) || {};
 
   return (
@@ -131,6 +136,12 @@ function Navbar() {
               className={`font-medium text-sm pb-1 transition ${getDNAClass()}`}
             >
               DNA
+            </Link>
+            <Link
+              to="/analytics"
+              className={`font-medium text-sm pb-1 transition ${getAnalyticsClass()}`}
+            >
+              Analytics
             </Link>
           </div>
 
