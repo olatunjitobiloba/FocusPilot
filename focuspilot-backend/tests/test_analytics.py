@@ -205,6 +205,60 @@ class TestRecommendations:
 
 class TestAnalyticsAggregator:
 
+    @staticmethod
+    def _mock_productive_feedback(mock_supabase, productive_domains=None):
+        productive_domains = productive_domains or []
+        query = MagicMock()
+        query.select.return_value = query
+        query.eq.return_value = query
+        query.execute.return_value = MagicMock(
+            data=[{'domain': domain} for domain in productive_domains]
+        )
+        mock_supabase.table.return_value = query
+
+    def test_time_breakdown_merges_www_variants(self):
+        with patch('app.analytics.aggregator.get_supabase') as mock_sb:
+            mock_supabase = MagicMock()
+            self._mock_productive_feedback(mock_supabase, [])
+            mock_sb.return_value = mock_supabase
+
+            from app.analytics.aggregator import AnalyticsAggregator
+            agg = AnalyticsAggregator('test-user')
+
+            activity = [
+                {'domain': 'www.instagram.com', 'duration_seconds': 1800},
+                {'domain': 'instagram.com', 'duration_seconds': 600},
+            ]
+
+            breakdown = agg._compute_time_breakdown(activity)
+            assert len(breakdown['top_sites']) == 1
+            assert breakdown['top_sites'][0]['domain'] == 'instagram.com'
+            assert breakdown['top_sites'][0]['minutes'] == 40.0
+
+    def test_time_breakdown_respects_productive_override(self):
+        with patch('app.analytics.aggregator.get_supabase') as mock_sb:
+            mock_supabase = MagicMock()
+            self._mock_productive_feedback(mock_supabase, ['instagram.com'])
+            mock_sb.return_value = mock_supabase
+
+            from app.analytics.aggregator import AnalyticsAggregator
+            agg = AnalyticsAggregator('test-user')
+
+            activity = [
+                {'domain': 'www.instagram.com', 'duration_seconds': 1200},
+            ]
+
+            breakdown = agg._compute_time_breakdown(activity)
+            categories = {
+                item['name']: item['minutes']
+                for item in breakdown['categories']
+            }
+
+            assert categories['Productive'] == 20.0
+            assert categories['Distraction'] == 0.0
+            assert breakdown['top_sites'][0]['is_productive'] is True
+            assert breakdown['top_sites'][0]['is_distraction'] is False
+
     def test_compute_summary_empty_sessions(self):
         with patch('app.analytics.aggregator.get_supabase') as mock_sb:
             mock_sb.return_value = MagicMock()

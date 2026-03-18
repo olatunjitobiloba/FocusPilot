@@ -16,7 +16,7 @@ Returns structured analytics data ready for the frontend.
 import numpy as np
 import re
 from datetime import datetime, timedelta, date
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Set
 from dateutil.parser import isoparse
 from app.database import get_supabase
 
@@ -26,6 +26,35 @@ class AnalyticsAggregator:
     def __init__(self, user_id: str):
         self.user_id  = user_id
         self.supabase = get_supabase()
+        self._productive_domains_cache: Optional[Set[str]] = None
+
+    def _normalize_domain(self, value: str) -> str:
+        domain = (value or '').strip().lower()
+        domain = domain.replace('https://', '').replace('http://', '')
+        domain = domain.split('/')[0]
+        if domain.startswith('www.'):
+            domain = domain[4:]
+        return domain
+
+    def _get_productive_domains(self) -> Set[str]:
+        if self._productive_domains_cache is not None:
+            return self._productive_domains_cache
+
+        result = (
+            self.supabase
+            .table('suggestion_feedback')
+            .select('domain')
+            .eq('user_id', self.user_id)
+            .eq('action', 'productive')
+            .execute()
+        )
+
+        self._productive_domains_cache = {
+            self._normalize_domain(item.get('domain', ''))
+            for item in (result.data or [])
+            if item.get('domain')
+        }
+        return self._productive_domains_cache
 
     # ── Main method ────────────────────────────────────────────────────
 
@@ -204,10 +233,12 @@ class AnalyticsAggregator:
 
         # Total distraction time
         from app.ml.clustering.feature_extractor import DISTRACTION_DOMAINS
+        productive_domains = self._get_productive_domains()
         distraction_secs = sum(
             a.get('duration_seconds') or 0
             for a in activity
-            if a.get('domain', '') in DISTRACTION_DOMAINS
+            if self._normalize_domain(a.get('domain', '')) in DISTRACTION_DOMAINS
+            and self._normalize_domain(a.get('domain', '')) not in productive_domains
         )
         distraction_mins = round(distraction_secs / 60, 1)
 
@@ -337,6 +368,7 @@ class AnalyticsAggregator:
         from app.ml.clustering.feature_extractor import (
             DISTRACTION_DOMAINS, PRODUCTIVE_DOMAINS
         )
+        productive_override = self._get_productive_domains()
 
         if not activity:
             return {
@@ -352,12 +384,14 @@ class AnalyticsAggregator:
         site_times: Dict[str, int] = {}
 
         for a in activity:
-            domain   = a.get('domain', 'unknown')
+            domain   = self._normalize_domain(a.get('domain', '')) or 'unknown'
             duration = a.get('duration_seconds') or 0
 
             site_times[domain] = site_times.get(domain, 0) + duration
 
-            if domain in DISTRACTION_DOMAINS:
+            if domain in productive_override:
+                productive_secs += duration
+            elif domain in DISTRACTION_DOMAINS:
                 distraction_secs += duration
             elif domain in PRODUCTIVE_DOMAINS:
                 productive_secs += duration
@@ -402,8 +436,8 @@ class AnalyticsAggregator:
                 'domain':  domain,
                 'minutes': round(secs / 60, 1),
                 'pct':     round(secs / total * 100, 1),
-                'is_distraction': domain in DISTRACTION_DOMAINS,
-                'is_productive':  domain in PRODUCTIVE_DOMAINS
+                'is_distraction': domain in DISTRACTION_DOMAINS and domain not in productive_override,
+                'is_productive':  domain in PRODUCTIVE_DOMAINS or domain in productive_override
             }
             for domain, secs in top_sites
         ]

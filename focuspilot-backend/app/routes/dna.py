@@ -6,6 +6,7 @@ Productivity DNA endpoints.
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from app.auth import get_current_user_id
 from app.ml.clustering.dna_trainer import DNATrainer
+from app.ml.data_extractor import DataExtractor
 
 router = APIRouter(prefix="/dna", tags=["DNA"])
 
@@ -118,4 +119,21 @@ def get_insights(user_id: str = Depends(get_current_user_id)):
         'peak_hours':          dna.get('peak_hours', []),
         'best_session_length': dna.get('best_session_length', {}),
         'worst_patterns':      dna.get('worst_patterns', [])
+    }
+
+
+@router.get("/eligibility")
+def get_dna_eligibility(user_id: str = Depends(get_current_user_id)):
+    """Return a quick summary of whether user can train DNA now."""
+    summary = DataExtractor(user_id).get_data_summary()
+    required = DNATrainer.MIN_SESSIONS
+    completed = summary.get('completed_sessions', 0)
+
+    return {
+        'can_train': completed >= required,
+        'required_sessions': required,
+        'completed_sessions': completed,
+        'remaining_sessions': max(0, required - completed),
+        'total_sessions': summary.get('total_sessions', 0),
+        'days_of_data': summary.get('days_of_data', 0)
     }

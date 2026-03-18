@@ -5,6 +5,18 @@ Run with: pytest tests/test_suggestions.py -v
 """
 
 import pytest
+from app.routes.suggestions import normalize_domain
+
+
+class TestSuggestionDomainNormalization:
+
+    def test_normalize_domain_strips_scheme_www_and_path(self):
+        assert normalize_domain('https://www.instagram.com/reel/abc') == 'instagram.com'
+
+    def test_normalize_domain_keeps_typo_domain_distinct(self):
+        # Typo domains are intentionally not merged with real domains.
+        assert normalize_domain('www.instagtam.com') == 'instagtam.com'
+        assert normalize_domain('instagram.com') == 'instagram.com'
 
 
 class TestGetSuggestions:

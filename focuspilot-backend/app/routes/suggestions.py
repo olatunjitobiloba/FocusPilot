@@ -48,15 +48,8 @@ def get_site_suggestions(user_id: str = Depends(get_current_user_id)):
         .execute()
     )
 
-    sessions   = sessions_result.data
-    activities = filter_activities_by_domain(activities_result.data)
-
-    if not activities:
-        return {
-            "suggestions": [],
-            "message": "No browsing data yet. Complete a few sessions first!",
-            "data_points": 0
-        }
+    sessions = sessions_result.data
+    raw_activities = filter_activities_by_domain(activities_result.data)
 
     # Get current blocklist so we can mark already-blocked domains
     blocklist_result = (
@@ -84,6 +77,38 @@ def get_site_suggestions(user_id: str = Depends(get_current_user_id)):
         if item.get('domain')
     }
 
+    dismissed_result = (
+        supabase.table('suggestion_feedback')
+        .select('domain')
+        .eq('user_id', user_id)
+        .eq('action', 'dismissed')
+        .execute()
+    )
+    dismissed_domains = {
+        normalize_domain(item.get('domain', ''))
+        for item in dismissed_result.data
+        if item.get('domain')
+    }
+
+    activities = []
+    for activity in raw_activities:
+        normalized_domain = normalize_domain(activity.get('domain', ''))
+        if not normalized_domain:
+            continue
+        if normalized_domain in productive_domains:
+            continue
+
+        enriched = dict(activity)
+        enriched['domain'] = normalized_domain
+        activities.append(enriched)
+
+    if not activities:
+        return {
+            "suggestions": [],
+            "message": "No browsing data yet. Complete a few sessions first!",
+            "data_points": 0
+        }
+
     # Run ML scoring
     scored = scorer.score_domains(sessions, activities)
 
@@ -92,6 +117,8 @@ def get_site_suggestions(user_id: str = Depends(get_current_user_id)):
     for item in scored:
         normalized_item_domain = normalize_domain(item.get('domain', ''))
         if normalized_item_domain in productive_domains:
+            continue
+        if normalized_item_domain in dismissed_domains:
             continue
         item['already_blocked'] = normalized_item_domain in blocked_domains
         suggestions.append(item)
@@ -243,13 +270,19 @@ def get_domain_score(
         supabase.table('browsing_activity')
         .select("*")
         .eq('user_id', user_id)
-        .eq('domain', normalized_domain)
         .gte('timestamp', start_date)
         .execute()
     )
 
     sessions   = sessions_result.data
-    activities = activities_result.data
+    activities = [
+        {
+            **activity,
+            'domain': normalize_domain(activity.get('domain', ''))
+        }
+        for activity in (activities_result.data or [])
+        if normalize_domain(activity.get('domain', '')) == normalized_domain
+    ]
 
     if is_whitelisted_domain(normalized_domain):
         return {
