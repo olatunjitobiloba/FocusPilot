@@ -313,8 +313,13 @@ class QLearningAgent:
         # Start with 0.0 for all actions (optimistic initialization)
         q_values = {action: 0.0 for action in ACTIONS}
 
-        for row in (result.data or []):
-            q_values[row['action']] = row['q_value']
+        rows = result.data if isinstance(result.data, list) else []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            row_action = row.get('action')
+            if row_action in q_values:
+                q_values[row_action] = self._to_float(row.get('q_value'))
 
         return q_values
 
@@ -334,9 +339,18 @@ class QLearningAgent:
             .execute()
         )
 
-        if result.data:
-            return result.data[0]['q_value']
+        rows = result.data if isinstance(result.data, list) else []
+        if rows and isinstance(rows[0], dict):
+            return self._to_float(rows[0].get('q_value'))
         return 0.0   # Default Q-value
+
+    @staticmethod
+    def _to_float(value: Any) -> float:
+        """Best-effort conversion for DB values and test doubles."""
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
 
     def _save_q_value(
         self,

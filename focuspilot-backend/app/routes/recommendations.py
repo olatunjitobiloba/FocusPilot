@@ -5,6 +5,7 @@ from app.database import get_supabase, execute_with_retries
 from app.domain_whitelist import filter_activities_by_domain
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
+from typing import Optional
 import re
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
@@ -36,6 +37,92 @@ def normalize_domain(value: str) -> str:
         domain = domain[4:]
     return domain
 
+
+def get_productive_domains(user_id: str) -> set[str]:
+    result = execute_with_retries(
+        lambda db: db.table('suggestion_feedback')
+        .select('domain')
+        .eq('user_id', user_id)
+        .eq('action', 'productive')
+        .execute()
+    )
+    return {
+        normalize_domain(item.get('domain', ''))
+        for item in (result.data or [])
+        if item.get('domain')
+    }
+
+
+def build_block_sites_recommendation(
+    sessions: list[dict],
+    activities: list[dict],
+    productive_domains: set[str],
+    limit: int = 3,
+) -> Optional[dict]:
+    if not activities:
+        return None
+
+    low_focus_session_ids = {
+        s['id']
+        for s in sessions
+        if s.get('focus_score') is not None and s.get('focus_score') < 5
+    }
+
+    domain_stats = defaultdict(lambda: {
+        'total_seconds': 0,
+        'visits': 0,
+        'low_focus_visits': 0,
+    })
+
+    for activity in activities:
+        domain = normalize_domain(activity.get('domain', ''))
+        if not domain or domain in productive_domains:
+            continue
+
+        duration = activity.get('duration_seconds') or 0
+        session_id = activity.get('session_id')
+        stats = domain_stats[domain]
+        stats['total_seconds'] += duration
+        stats['visits'] += 1
+
+        if session_id in low_focus_session_ids:
+            stats['low_focus_visits'] += 1
+
+    if not domain_stats:
+        return None
+
+    def rank_key(item: tuple[str, dict]) -> tuple[float, float, int]:
+        _, stats = item
+        visits = max(stats['visits'], 1)
+        low_focus_ratio = stats['low_focus_visits'] / visits
+        total_minutes = stats['total_seconds'] / 60
+
+        # Favor low-focus correlation first, then total study-time spent.
+        weighted_score = (low_focus_ratio * 0.7) + (min(total_minutes / 30, 1.0) * 0.3)
+        return (weighted_score, total_minutes, stats['visits'])
+
+    ranked = sorted(domain_stats.items(), key=rank_key, reverse=True)[:limit]
+    if not ranked:
+        return None
+
+    has_low_focus_signal = any(stats['low_focus_visits'] > 0 for _, stats in ranked)
+    top_domains = [domain for domain, _ in ranked]
+    domain_list = ', '.join(top_domains)
+
+    message = (
+        f"You visit {domain_list} during low-focus sessions. Consider blocking them."
+        if has_low_focus_signal
+        else f"You spend the most study-time on {domain_list}. Consider blocking them to stay focused."
+    )
+
+    return {
+        'type': 'block_sites',
+        'title': 'Sites to Block',
+        'message': message,
+        'domains': top_domains,
+        'priority': 'high'
+    }
+
 @router.get("/")
 def get_recommendations(user_id: str = Depends(get_current_user_id)):
     """
@@ -56,6 +143,7 @@ def get_recommendations(user_id: str = Depends(get_current_user_id)):
     
     sessions = sessions_result.data
     activities = filter_activities_by_domain(activities_result.data)
+    productive_domains = get_productive_domains(user_id)
     
     recommendations = []
     
@@ -79,38 +167,13 @@ def get_recommendations(user_id: str = Depends(get_current_user_id)):
                 })
     
     # Recommendation 2: Sites to block
-    if activities:
-        # Find sites visited during low-focus sessions
-        low_focus_sessions = [s for s in sessions if s['focus_score'] and s['focus_score'] < 5]
-        
-        if low_focus_sessions:
-            low_focus_session_ids = [s['id'] for s in low_focus_sessions]
-            
-            # Get activities during these sessions
-            problem_activities = [a for a in activities if a['session_id'] in low_focus_session_ids]
-            
-            if problem_activities:
-                # Count domain frequency
-                domain_count = defaultdict(int)
-                for activity in problem_activities:
-                    domain = normalize_domain(activity.get('domain', ''))
-                    if not domain:
-                        continue
-                    domain_count[domain] += 1
-                
-                # Get top 3 problematic domains
-                top_domains = sorted(domain_count.items(), key=lambda x: x[1], reverse=True)[:3]
-                
-                if top_domains:
-                    domain_list = ', '.join([d[0] for d in top_domains])
-                    
-                    recommendations.append({
-                        'type': 'block_sites',
-                        'title': 'Sites to Block',
-                        'message': f"You visit {domain_list} during low-focus sessions. Consider blocking them.",
-                        'domains': [d[0] for d in top_domains],
-                        'priority': 'high'
-                    })
+    block_sites_recommendation = build_block_sites_recommendation(
+        sessions=sessions,
+        activities=activities,
+        productive_domains=productive_domains,
+    )
+    if block_sites_recommendation:
+        recommendations.append(block_sites_recommendation)
     
     # Recommendation 3: Best time to study
     if sessions:

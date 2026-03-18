@@ -7,6 +7,7 @@ Run with: pytest tests/test_analytics.py -v
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock
+from app.routes.recommendations import build_block_sites_recommendation
 
 
 def make_mock_sessions(n: int = 10) -> list:
@@ -277,6 +278,52 @@ class TestAnalyticsAggregator:
             summary = agg._compute_summary(sessions, [])
             assert summary['total_sessions'] == 5
             assert summary['total_focused_hours'] > 0
+
+
+class TestBlockSiteRecommendationLogic:
+
+    def test_includes_top_domains_without_low_focus_signal(self):
+        sessions = [
+            {'id': 's1', 'focus_score': 8},
+            {'id': 's2', 'focus_score': 7},
+        ]
+        activities = [
+            {'session_id': 's1', 'domain': 'www.instagram.com', 'duration_seconds': 1800},
+            {'session_id': 's1', 'domain': 'instagram.com/reel/abc', 'duration_seconds': 900},
+            {'session_id': 's2', 'domain': 'youtube.com', 'duration_seconds': 600},
+        ]
+
+        recommendation = build_block_sites_recommendation(
+            sessions=sessions,
+            activities=activities,
+            productive_domains=set(),
+        )
+
+        assert recommendation is not None
+        assert recommendation['type'] == 'block_sites'
+        assert recommendation['domains'][0] == 'instagram.com'
+        assert 'study-time' in recommendation['message']
+
+    def test_prefers_low_focus_correlated_domains(self):
+        sessions = [
+            {'id': 's1', 'focus_score': 3},
+            {'id': 's2', 'focus_score': 8},
+        ]
+        activities = [
+            {'session_id': 's1', 'domain': 'x.com', 'duration_seconds': 300},
+            {'session_id': 's1', 'domain': 'x.com', 'duration_seconds': 300},
+            {'session_id': 's2', 'domain': 'youtube.com', 'duration_seconds': 1200},
+        ]
+
+        recommendation = build_block_sites_recommendation(
+            sessions=sessions,
+            activities=activities,
+            productive_domains=set(),
+        )
+
+        assert recommendation is not None
+        assert recommendation['domains'][0] == 'x.com'
+        assert 'low-focus sessions' in recommendation['message']
 
     def test_compute_streak_consecutive_days(self):
         with patch('app.analytics.aggregator.get_supabase') as mock_sb:
