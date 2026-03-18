@@ -1,6 +1,32 @@
 import React, { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
+function BrainIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      <path
+        d="M9.5 5a3.5 3.5 0 0 0-3.5 3.5v.2a2.8 2.8 0 0 0-2 2.68A2.8 2.8 0 0 0 6 14.06V15a3 3 0 0 0 3 3h1V5H9.5ZM14.5 5H14v13h1a3 3 0 0 0 3-3v-.94a2.8 2.8 0 0 0 2-2.68 2.8 2.8 0 0 0-2-2.68v-.2A3.5 3.5 0 0 0 14.5 5Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10 8.2a2.2 2.2 0 0 1-2.2 2.2M10 12.4a2.2 2.2 0 0 1-2.2 2.2M14 8.2a2.2 2.2 0 0 0 2.2 2.2M14 12.4a2.2 2.2 0 0 0 2.2 2.2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function safeParseUser(raw: string | null) {
   if (!raw) return null;
   try {
@@ -78,6 +104,11 @@ function Navbar() {
       ? 'text-green-600 border-b-2 border-green-600'
       : 'text-gray-600 hover:text-gray-900';
 
+  const getInterventionsClass = () =>
+    location.pathname === '/interventions'
+      ? 'text-green-600 border-b-2 border-green-600'
+      : 'text-gray-600 hover:text-gray-900';
+
   const user = safeParseUser(localStorage.getItem('user')) || {};
 
   return (
@@ -142,6 +173,13 @@ function Navbar() {
               className={`font-medium text-sm pb-1 transition ${getAnalyticsClass()}`}
             >
               Analytics
+            </Link>
+            <Link
+              to="/interventions"
+              className={`font-medium text-sm pb-1 transition inline-flex items-center gap-1.5 ${getInterventionsClass()}`}
+            >
+              <BrainIcon className="h-4 w-4" />
+              <span>Interventions</span>
             </Link>
           </div>
 

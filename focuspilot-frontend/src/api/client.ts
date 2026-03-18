@@ -259,6 +259,17 @@ export const analyticsAPI = {
     api.get(`/analytics/agent-stats?days=${days}`),
 };
 
+export const rlAPI = {
+  getEpisodes: () =>
+    api.get('/rl/episodes'),
+
+  getLearningStats: () =>
+    api.get('/rl/stats'),
+
+  getPolicy: () =>
+    api.get('/rl/policy'),
+};
+
 export const dnaAPI = {
   train: () =>
     api.post('/dna/train/sync', {}, { timeout: 120000 }),

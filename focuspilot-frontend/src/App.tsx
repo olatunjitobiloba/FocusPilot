@@ -12,6 +12,7 @@ import Settings  from './pages/Settings';
 import ExecutionLog from './pages/ExecutionLog';
 import ProductivityDNA from './pages/ProductivityDNA';
 import Analytics from './pages/Analytics';
+import InterventionHistory from './pages/InterventionHistory';
 import { applyTheme, getStoredTheme } from './utils/theme';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -78,6 +79,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Analytics />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/interventions"
+          element={
+            <ProtectedRoute>
+              <InterventionHistory />
             </ProtectedRoute>
           }
         />
