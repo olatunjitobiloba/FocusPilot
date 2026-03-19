@@ -152,7 +152,7 @@ function AgentStatus() {
               className={`px-4 py-2 rounded-lg font-medium transition text-sm ${
                 status?.state === 'paused'
                   ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  : 'bg-amber-500 text-white hover:bg-amber-600'
               }`}
             >
               {status?.state === 'paused' ? 'Resume Agent' : 'Pause Agent'}

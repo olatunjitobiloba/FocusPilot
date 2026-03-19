@@ -14,6 +14,7 @@
 	--fp-brand: #0f766e;
 	--fp-brand-strong: #115e59;
 	--fp-brand-soft: #ccfbf1;
+	--fp-warning-soft: #fef9c3;
 }
 
 html[data-theme='dark'] {
@@ -28,6 +29,7 @@ html[data-theme='dark'] {
 	--fp-brand: #34d399;
 	--fp-brand-strong: #10b981;
 	--fp-brand-soft: #0f2f28;
+	--fp-warning-soft: #3a2f14;
 }
 
 html,
@@ -111,6 +113,14 @@ body {
 
 .bg-green-100 {
 	background-color: var(--fp-brand-soft) !important;
+}
+
+.bg-green-50 {
+	background-color: var(--fp-brand-soft) !important;
+}
+
+.bg-yellow-50 {
+	background-color: var(--fp-warning-soft) !important;
 }
 
 .focus\:ring-green-500:focus,
