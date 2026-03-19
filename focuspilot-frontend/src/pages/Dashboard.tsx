@@ -62,7 +62,7 @@ const EMPTY_STATS: Stats = {
   avgMinPerSession: 0,
 };
 
-const COLORS = CHART_GREEN.series;
+const DISTRACTION_COLORS = ['#fecaca', '#fca5a5', '#f87171', '#ef4444', '#b91c1c'];
 const DASHBOARD_CACHE_KEY = 'focuspilot_dashboard_cache_v1';
 
 // ── SMALL COMPONENTS ──────────────────────────────────────────────
@@ -592,7 +592,7 @@ export default function Dashboard() {
                           label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                         >
                           {distractionData.map((_, i) => (
-                            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                            <Cell key={i} fill={DISTRACTION_COLORS[i % DISTRACTION_COLORS.length]} />
                           ))}
                         </Pie>
                         <Tooltip formatter={(v) => [`${v} min`, 'Time spent']} />
@@ -608,7 +608,7 @@ export default function Dashboard() {
                           <div className="flex items-center gap-3 min-w-0">
                             <span
                               className="h-3 w-3 rounded-full shrink-0"
-                              style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                              style={{ backgroundColor: DISTRACTION_COLORS[index % DISTRACTION_COLORS.length] }}
                             />
                             <div className="min-w-0">
                               <p className="text-sm font-semibold text-gray-800 truncate">{item.name}</p>
