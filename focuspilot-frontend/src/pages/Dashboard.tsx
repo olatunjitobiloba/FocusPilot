@@ -62,7 +62,7 @@ const EMPTY_STATS: Stats = {
   avgMinPerSession: 0,
 };
 
-const DISTRACTION_COLORS = ['#fecaca', '#fca5a5', '#f87171', '#ef4444', '#b91c1c'];
+const DISTRACTION_COLORS = ['#b91c1c', '#ef4444', '#f87171', '#fca5a5', '#fecaca'];
 const DASHBOARD_CACHE_KEY = 'focuspilot_dashboard_cache_v1';
 
 // ── SMALL COMPONENTS ──────────────────────────────────────────────
@@ -435,6 +435,8 @@ export default function Dashboard() {
     }
   };
 
+  const sortedDistractionData = [...distractionData].sort((a, b) => b.value - a.value);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -584,14 +586,14 @@ export default function Dashboard() {
                     <ResponsiveContainer width="100%" height={200}>
                       <PieChart>
                         <Pie
-                          data={distractionData}
+                          data={sortedDistractionData}
                           cx="50%"
                           cy="50%"
                           outerRadius={70}
                           dataKey="value"
                           label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                         >
-                          {distractionData.map((_, i) => (
+                          {sortedDistractionData.map((_, i) => (
                             <Cell key={i} fill={DISTRACTION_COLORS[i % DISTRACTION_COLORS.length]} />
                           ))}
                         </Pie>
@@ -600,7 +602,7 @@ export default function Dashboard() {
                     </ResponsiveContainer>
 
                     <div className="mt-4 space-y-3">
-                      {distractionData.map((item, index) => (
+                      {sortedDistractionData.map((item, index) => (
                         <div
                           key={item.name}
                           className="flex items-center justify-between rounded-xl border border-gray-100 px-4 py-3"
@@ -619,7 +621,7 @@ export default function Dashboard() {
                             onClick={() => handleMarkProductive(item.name)}
                             className="ml-4 shrink-0 rounded-lg border border-green-300 px-3 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50"
                           >
-                            Productive
+                            Productive?
                           </button>
                         </div>
                       ))}
