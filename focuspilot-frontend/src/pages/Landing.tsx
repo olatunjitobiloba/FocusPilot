@@ -7,9 +7,9 @@ export default function Landing() {
   return (
     <div className="min-h-screen relative overflow-hidden bg-slate-950 text-slate-100">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-44 -left-40 h-96 w-96 rounded-full bg-cyan-400/30 blur-3xl" />
+        <div className="absolute -top-44 -left-40 h-96 w-96 rounded-full bg-emerald-400/30 blur-3xl" />
         <div className="absolute top-1/3 -right-28 h-80 w-80 rounded-full bg-emerald-400/20 blur-3xl" />
-        <div className="absolute bottom-0 left-1/4 h-72 w-72 rounded-full bg-blue-500/15 blur-3xl" />
+        <div className="absolute bottom-0 left-1/4 h-72 w-72 rounded-full bg-green-500/20 blur-3xl" />
       </div>
 
       <nav className="relative border-b border-white/10 bg-slate-950/75 backdrop-blur-md">
@@ -31,7 +31,7 @@ export default function Landing() {
               </button>
               <button
                 onClick={() => navigate('/signup')}
-                className="px-5 py-2 rounded-lg bg-cyan-300 text-slate-900 font-semibold hover:bg-cyan-200 transition"
+                className="px-5 py-2 rounded-lg bg-emerald-300 text-slate-900 font-semibold hover:bg-emerald-200 transition"
               >
                 Start Free
               </button>
@@ -40,10 +40,10 @@ export default function Landing() {
         </div>
       </nav>
 
-      <main className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
-        <section className="grid lg:grid-cols-2 gap-10 items-center">
+      <main className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-20">
+        <section className="grid lg:grid-cols-2 gap-8 lg:gap-10 items-center">
           <div>
-            <p className="inline-flex items-center rounded-full border border-cyan-300/40 bg-cyan-300/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-cyan-200 mb-5">
+            <p className="inline-flex items-center rounded-full border border-emerald-300/40 bg-emerald-300/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-200 mb-4 sm:mb-5">
               Adaptive Productivity AI
             </p>
             <h1
@@ -54,32 +54,32 @@ export default function Landing() {
               <br />
               Work in sharp focus blocks.
             </h1>
-            <p className="mt-5 text-lg text-slate-300 max-w-xl">
+            <p className="mt-4 sm:mt-5 text-base sm:text-lg text-slate-300 max-w-xl">
               FocusPilot watches your behavior patterns and intervenes before distraction derails your session.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
               <button
                 onClick={() => navigate('/signup')}
-                className="px-7 py-3 rounded-lg bg-cyan-300 text-slate-900 font-bold hover:bg-cyan-200 transition shadow-[0_10px_30px_rgba(103,232,249,0.35)]"
+                className="w-full sm:w-auto px-7 py-3 rounded-lg bg-emerald-300 text-slate-900 font-bold hover:bg-emerald-200 transition shadow-[0_10px_30px_rgba(110,231,183,0.35)]"
               >
                 Launch Dashboard
               </button>
               <button
                 onClick={() => navigate('/login')}
-                className="px-7 py-3 rounded-lg border border-white/20 text-white hover:bg-white/10 transition"
+                className="w-full sm:w-auto px-7 py-3 rounded-lg border border-white/20 text-white hover:bg-white/10 transition"
               >
                 Existing Account
               </button>
             </div>
-            <div className="mt-8 grid grid-cols-3 gap-3 max-w-xl">
+            <div className="mt-6 sm:mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl">
               <Metric value="30m" label="Early warning" />
               <Metric value="4x" label="Interventions" />
               <Metric value="24/7" label="Session coverage" />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-6 lg:p-7 backdrop-blur-sm shadow-2xl">
-            <p className="text-xs tracking-[0.15em] uppercase text-cyan-200/90 mb-4">Live Session Snapshot</p>
+          <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-5 sm:p-6 lg:p-7 backdrop-blur-sm shadow-2xl">
+            <p className="text-xs tracking-[0.15em] uppercase text-emerald-200/90 mb-4">Live Session Snapshot</p>
             <div className="space-y-4">
               <StatusRow
                 title="Context Detection"
@@ -94,11 +94,11 @@ export default function Landing() {
               <StatusRow
                 title="Agent Action"
                 subtitle="Prompt + site block recommendation queued"
-                tone="cyan"
+                tone="green"
               />
             </div>
             <div className="mt-5 h-2 rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full w-4/5 bg-gradient-to-r from-cyan-300 to-emerald-300" />
+              <div className="h-full w-4/5 bg-gradient-to-r from-emerald-300 to-green-300" />
             </div>
             <p className="mt-2 text-xs text-slate-400">Updated every 8 seconds while your focus session is active.</p>
           </div>
@@ -108,7 +108,7 @@ export default function Landing() {
           <FeatureCard
             title="Behavior-aware sessions"
             body="Interventions adapt to your rhythm, so nudges arrive when they can still change the outcome."
-            accent="bg-cyan-300"
+            accent="bg-emerald-300"
           />
           <FeatureCard
             title="Reinforcement learning engine"
@@ -118,11 +118,11 @@ export default function Landing() {
           <FeatureCard
             title="Decision timeline"
             body="See exactly when the agent intervened, what it did, and whether your focus recovered."
-            accent="bg-blue-300"
+            accent="bg-green-300"
           />
         </section>
 
-        <section className="mt-14 rounded-2xl border border-white/10 bg-gradient-to-r from-slate-900 to-slate-800 p-6 lg:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+        <section className="mt-10 sm:mt-14 rounded-2xl border border-white/10 bg-gradient-to-r from-slate-900 to-slate-800 p-5 sm:p-6 lg:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 sm:gap-6">
           <div>
             <h2
               className="text-2xl sm:text-3xl font-black text-white"
@@ -136,7 +136,7 @@ export default function Landing() {
           </div>
           <button
             onClick={() => navigate('/signup')}
-            className="px-6 py-3 rounded-lg bg-cyan-300 text-slate-900 font-bold hover:bg-cyan-200 transition whitespace-nowrap"
+            className="w-full sm:w-auto px-6 py-3 rounded-lg bg-emerald-300 text-slate-900 font-bold hover:bg-emerald-200 transition whitespace-nowrap"
           >
             Create Account
           </button>
@@ -149,7 +149,7 @@ export default function Landing() {
 function Metric({ value, label }: { value: string; label: string }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-      <p className="text-xl font-extrabold text-cyan-200">{value}</p>
+      <p className="text-xl font-extrabold text-emerald-200">{value}</p>
       <p className="text-xs text-slate-300">{label}</p>
     </div>
   );
@@ -162,12 +162,12 @@ function StatusRow({
 }: {
   title: string;
   subtitle: string;
-  tone: 'emerald' | 'amber' | 'cyan';
+  tone: 'emerald' | 'amber' | 'green';
 }) {
-  const toneClasses: Record<'emerald' | 'amber' | 'cyan', string> = {
+  const toneClasses: Record<'emerald' | 'amber' | 'green', string> = {
     emerald: 'bg-emerald-300',
     amber: 'bg-amber-300',
-    cyan: 'bg-cyan-300'
+    green: 'bg-green-300'
   };
 
   return (

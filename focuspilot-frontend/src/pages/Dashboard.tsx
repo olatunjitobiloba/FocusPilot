@@ -11,6 +11,7 @@ import Navbar from '../components/Navbar';
 import RiskMeter from '../components/RiskMeter';
 import FeatureImportanceChart from '../components/FeatureImportanceChart';
 import BlockStateWidget from '../components/BlockStateWidget';
+import { CHART_GREEN } from '../utils/greenPalette';
 
 interface Stats {
   todayHours: number;
@@ -61,7 +62,7 @@ const EMPTY_STATS: Stats = {
   avgMinPerSession: 0,
 };
 
-const COLORS = ['#b91c1c', '#dc2626', '#ef4444', '#f87171'];
+const COLORS = CHART_GREEN.series;
 const DASHBOARD_CACHE_KEY = 'focuspilot_dashboard_cache_v1';
 
 // ── SMALL COMPONENTS ──────────────────────────────────────────────
@@ -477,7 +478,7 @@ export default function Dashboard() {
             }} />
 
             {actionMessage && (
-              <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg">
+              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
                 <p className="text-sm">{actionMessage}</p>
               </div>
             )}
@@ -565,7 +566,7 @@ export default function Dashboard() {
                       <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                       <YAxis tick={{ fontSize: 12 }} unit="h" />
                       <Tooltip formatter={(v) => [`${v}h`, 'Focus Time']} />
-                      <Bar dataKey="hours" fill="#16a34a" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="hours" fill={CHART_GREEN.bar} radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -616,7 +617,7 @@ export default function Dashboard() {
                           </div>
                           <button
                             onClick={() => handleMarkProductive(item.name)}
-                            className="ml-4 shrink-0 rounded-lg border border-blue-300 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                            className="ml-4 shrink-0 rounded-lg border border-green-300 px-3 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50"
                           >
                             Productive
                           </button>

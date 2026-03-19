@@ -57,12 +57,12 @@ function Login() {
   return (
     <div className="min-h-screen relative overflow-hidden bg-slate-950 flex items-center justify-center px-4 py-8">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-32 -left-20 h-80 w-80 rounded-full bg-cyan-300/25 blur-3xl" />
+        <div className="absolute -top-32 -left-20 h-80 w-80 rounded-full bg-emerald-300/25 blur-3xl" />
         <div className="absolute bottom-0 -right-12 h-80 w-80 rounded-full bg-emerald-300/20 blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/85 shadow-2xl backdrop-blur p-8">
-        <p className="text-xs uppercase tracking-[0.2em] text-cyan-200/90 text-center mb-3">
+      <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/85 shadow-2xl backdrop-blur p-6 sm:p-8">
+        <p className="text-xs uppercase tracking-[0.2em] text-emerald-200/90 text-center mb-3">
           FocusPilot Access
         </p>
         <h1
@@ -87,7 +87,7 @@ function Login() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg bg-slate-950/70 border border-white/15 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-300/80"
+              className="w-full px-4 py-2.5 rounded-lg bg-slate-950/70 border border-white/15 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-300/80"
               required
               disabled={loading}
               placeholder="test@example.com"
@@ -101,7 +101,7 @@ function Login() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg bg-slate-950/70 border border-white/15 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-300/80"
+              className="w-full px-4 py-2.5 rounded-lg bg-slate-950/70 border border-white/15 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-300/80"
               required
               disabled={loading}
               placeholder="password123"
@@ -111,7 +111,7 @@ function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-lg font-semibold bg-cyan-300 text-slate-900 hover:bg-cyan-200 disabled:bg-slate-600 disabled:text-slate-300 disabled:cursor-not-allowed transition"
+            className="w-full py-3 rounded-lg font-semibold bg-emerald-300 text-slate-900 hover:bg-emerald-200 disabled:bg-slate-600 disabled:text-slate-300 disabled:cursor-not-allowed transition"
           >
             {loading ? 'Logging In...' : 'Log In'}
           </button>
@@ -119,7 +119,7 @@ function Login() {
 
         <p className="text-center mt-5 text-slate-400 text-sm">
           Don't have an account?{' '}
-          <a href="/signup" className="text-cyan-200 hover:text-cyan-100 underline-offset-4 hover:underline">
+          <a href="/signup" className="text-emerald-200 hover:text-emerald-100 underline-offset-4 hover:underline">
             Sign Up
           </a>
         </p>

@@ -47,7 +47,7 @@ body {
 .bg-gray-100 {
 	background-color: var(--fp-bg) !important;
 	background-image: radial-gradient(circle at 14% 12%, rgba(15, 118, 110, 0.09), transparent 30%),
-		radial-gradient(circle at 86% 4%, rgba(14, 165, 233, 0.08), transparent 26%);
+		radial-gradient(circle at 86% 4%, rgba(34, 197, 94, 0.08), transparent 26%);
 }
 
 .bg-gray-50 {
@@ -107,8 +107,19 @@ body {
 }
 
 .focus\:ring-green-500:focus,
-.focus\:ring-green-600:focus {
+.focus\:ring-green-600:focus,
+.focus\:ring-emerald-300\/80:focus {
 	--tw-ring-color: var(--fp-brand) !important;
+}
+
+/* Horizontal scroll container for compact mobile nav */
+.fp-scroll-x {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+
+.fp-scroll-x::-webkit-scrollbar {
+	display: none;
 }
 
 /* Inputs and placeholders */

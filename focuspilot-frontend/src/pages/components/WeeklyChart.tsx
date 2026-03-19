@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { api } from '../../api/client';
+import { CHART_GREEN } from '../../utils/greenPalette';
 
 function WeeklyChart() {
   const [data, setData] = useState<any[]>([]);
@@ -64,7 +65,7 @@ function WeeklyChart() {
             formatter={(value: number | undefined) => value !== undefined ? [`${value}h`, 'Focus Time'] : null}
             labelFormatter={(label) => `Day: ${label}`}
           />
-          <Bar dataKey="hours" fill="#667eea" radius={[8, 8, 0, 0]} />
+          <Bar dataKey="hours" fill={CHART_GREEN.bar} radius={[8, 8, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

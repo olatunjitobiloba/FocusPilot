@@ -117,7 +117,7 @@ function Settings() {
             className={`px-6 py-3 rounded-lg font-semibold transition ${
               saved
                 ? 'bg-green-600 text-white'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-green-600 text-white hover:bg-green-700'
             } disabled:bg-gray-400`}
           >
             {saving ? 'Saving...' : saved ? 'Saved' : 'Save Changes'}
@@ -168,7 +168,7 @@ function Settings() {
                   onClick={() => update('agent_sensitivity', level)}
                   className={`px-4 py-2 rounded-lg font-medium capitalize transition ${
                     settings.agent_sensitivity === level
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-green-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -331,7 +331,7 @@ function Settings() {
                   onClick={() => update('theme', theme)}
                   className={`px-4 py-2 rounded-lg font-medium capitalize transition ${
                     settings.theme === theme
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-green-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -347,7 +347,7 @@ function Settings() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 transition"
+            className="px-8 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-400 transition"
           >
             {saving ? 'Saving...' : saved ? 'Saved' : 'Save Changes'}
           </button>
@@ -410,8 +410,8 @@ function Toggle({
       role="switch"
       aria-checked={value}
       onClick={() => onChange(!value)}
-      className={`relative inline-flex h-7 w-14 items-center rounded-full p-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
-        value ? 'bg-blue-600' : 'bg-gray-300'
+      className={`relative inline-flex h-7 w-14 items-center rounded-full p-0.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 ${
+        value ? 'bg-green-600' : 'bg-gray-300'
       }`}
     >
       <span

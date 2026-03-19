@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { rlAPI } from '../api/client';
 import { RLEpisode, LearningStats, PolicyEntry } from '../types/rl';
+import { CHART_GREEN, GREEN_SCALE } from '../utils/greenPalette';
 
 type IconName =
   | 'brain'
@@ -121,7 +122,7 @@ const ACTION_COLORS: Record<string, string> = {
   send_warning: '#f59e0b',
   block_sites: '#ef4444',
   start_break: '#10b981',
-  send_motivation: '#6366f1',
+  send_motivation: GREEN_SCALE[700],
   do_nothing: '#9ca3af'
 };
 
@@ -166,6 +167,39 @@ function InterventionHistory() {
     loadAll();
   }, []);
 
+  const normalizeLearningStats = (raw: unknown): LearningStats => {
+    const source = raw && typeof raw === 'object' ? (raw as Partial<LearningStats>) : {};
+    const actionCounts =
+      source.action_counts && typeof source.action_counts === 'object'
+        ? Object.entries(source.action_counts).reduce<Record<string, number>>((acc, [key, value]) => {
+            if (typeof value === 'number' && Number.isFinite(value)) {
+              acc[key] = value;
+            }
+            return acc;
+          }, {})
+        : {};
+    const rewardTrend = Array.isArray(source.reward_trend)
+      ? source.reward_trend
+          .filter(
+            (point): point is { episode: number; avg_reward: number } =>
+              typeof point?.episode === 'number' && typeof point?.avg_reward === 'number'
+          )
+          .map((point) => ({
+            episode: point.episode,
+            avg_reward: point.avg_reward
+          }))
+      : [];
+
+    return {
+      total_episodes: typeof source.total_episodes === 'number' ? source.total_episodes : 0,
+      avg_reward: typeof source.avg_reward === 'number' ? source.avg_reward : 0,
+      success_rate: typeof source.success_rate === 'number' ? source.success_rate : 0,
+      most_used_action: typeof source.most_used_action === 'string' ? source.most_used_action : '',
+      action_counts: actionCounts,
+      reward_trend: rewardTrend
+    };
+  };
+
   const loadAll = async () => {
     setLoading(true);
     try {
@@ -175,7 +209,7 @@ function InterventionHistory() {
         rlAPI.getPolicy()
       ]);
       setEpisodes(epRes.data.episodes || []);
-      setStats(statsRes.data);
+      setStats(normalizeLearningStats(statsRes.data));
       setPolicy(policyRes.data.policy || []);
     } catch (err) {
       console.error('RL load error:', err);
@@ -194,6 +228,9 @@ function InterventionHistory() {
       </div>
     );
   }
+
+  const rewardTrend = stats?.reward_trend ?? [];
+  const actionCounts = stats?.action_counts ?? {};
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -216,7 +253,7 @@ function InterventionHistory() {
               icon={<Icon name="target" className="w-5 h-5" />}
               label="Total Interventions"
               value={String(stats.total_episodes)}
-              color="text-indigo-600"
+              color="text-green-600"
             />
             <StatCard
               icon={<Icon name="check" className="w-5 h-5" />}
@@ -314,7 +351,7 @@ function InterventionHistory() {
                 Rolling average reward over time. Upward means the agent is learning better interventions.
               </p>
 
-              {stats.reward_trend.length === 0 ? (
+              {rewardTrend.length === 0 ? (
                 <EmptyState
                   icon={<Icon name="trend" className="w-12 h-12 text-gray-400" />}
                   title="Not enough data yet"
@@ -322,7 +359,7 @@ function InterventionHistory() {
                 />
               ) : (
                 <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={stats.reward_trend}>
+                  <LineChart data={rewardTrend}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis
                       dataKey="episode"
@@ -359,7 +396,7 @@ function InterventionHistory() {
                     <Line
                       type="monotone"
                       dataKey="avg_reward"
-                      stroke="#6366f1"
+                      stroke={CHART_GREEN.line}
                       strokeWidth={2.5}
                       dot={false}
                       activeDot={{ r: 4 }}
@@ -376,7 +413,7 @@ function InterventionHistory() {
               </h2>
               <p className="text-sm text-gray-500 mb-4">How often the agent chose each action</p>
 
-              {Object.keys(stats.action_counts).length === 0 ? (
+              {Object.keys(actionCounts).length === 0 ? (
                 <EmptyState
                   icon={<Icon name="target" className="w-12 h-12 text-gray-400" />}
                   title="No actions yet"
@@ -385,7 +422,7 @@ function InterventionHistory() {
               ) : (
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart
-                    data={Object.entries(stats.action_counts).map(([action, count]) => ({
+                    data={Object.entries(actionCounts).map(([action, count]) => ({
                       action: ACTION_LABELS[action] || action,
                       count,
                       color: ACTION_COLORS[action] || '#9ca3af'
@@ -403,7 +440,7 @@ function InterventionHistory() {
                       }}
                     />
                     <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {Object.entries(stats.action_counts).map(([action], i) => (
+                      {Object.entries(actionCounts).map(([action], i) => (
                         <Cell key={i} fill={ACTION_COLORS[action] || '#9ca3af'} />
                       ))}
                     </Bar>

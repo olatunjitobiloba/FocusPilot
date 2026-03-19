@@ -5,6 +5,7 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { predictionsAPI } from '../api/client';
+import { CHART_GREEN } from '../utils/greenPalette';
 
 function FeatureImportanceChart() {
   const [data, setData]       = useState<any[]>([]);
@@ -73,7 +74,7 @@ function FeatureImportanceChart() {
         />
         <Bar
           dataKey="importance"
-          fill="#667eea"
+          fill={CHART_GREEN.bar}
           radius={[0, 4, 4, 0]}
         />
       </BarChart>

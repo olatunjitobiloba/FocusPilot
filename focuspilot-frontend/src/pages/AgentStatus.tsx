@@ -9,7 +9,7 @@ const STATE_CONFIG = {
   active:      { color: 'bg-green-100 text-green-700',  icon: 'activity' as IconName,     label: 'Active'       },
   at_risk:     { color: 'bg-yellow-100 text-yellow-700',icon: 'warning' as IconName,      label: 'At Risk'     },
   intervening: { color: 'bg-red-100   text-red-700',    icon: 'intervention' as IconName, label: 'Intervening'  },
-  paused:      { color: 'bg-blue-100  text-blue-700',   icon: 'pause' as IconName,        label: 'Paused'       }
+  paused:      { color: 'bg-green-100 text-green-700',  icon: 'pause' as IconName,        label: 'Paused'       }
 };
 
 const stripEmoji = (value: string | undefined | null): string => {
@@ -143,7 +143,7 @@ function AgentStatus() {
             <button
               onClick={handleTriggerCycle}
               disabled={cycling}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 transition text-sm"
+              className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-400 transition text-sm"
             >
               {cycling ? 'Running...' : 'Run Cycle Now'}
             </button>
@@ -280,7 +280,7 @@ function AgentStatus() {
             onClick={() => setActiveTab('events')}
             className={`px-6 py-3 font-semibold text-sm transition ${
               activeTab === 'events'
-                ? 'border-b-2 border-blue-600 text-blue-600'
+                ? 'border-b-2 border-green-600 text-green-600'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
@@ -290,7 +290,7 @@ function AgentStatus() {
             onClick={() => setActiveTab('interventions')}
             className={`px-6 py-3 font-semibold text-sm transition ${
               activeTab === 'interventions'
-                ? 'border-b-2 border-blue-600 text-blue-600'
+                ? 'border-b-2 border-green-600 text-green-600'
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >

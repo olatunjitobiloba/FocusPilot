@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import { pipelineAPI } from '../api/client';
 import AppIcon, { IconName } from '../components/AppIcon';
+import { ALERT_TONES, CHART_GREEN } from '../utils/greenPalette';
 
 const COMPONENT_CONFIG: Record<string, { icon: IconName; label: string }> = {
   orchestrator: { icon: 'cpu', label: 'Orchestrator' },
@@ -228,7 +229,7 @@ function AgentDashboard() {
             icon="chart"
             label="Cycles Today"
             value={summary?.total_cycles || 0}
-            color="text-blue-600"
+            color="text-green-600"
           />
           <StatCard
             icon="warning"
@@ -240,7 +241,7 @@ function AgentDashboard() {
             icon="bolt"
             label="Actions Taken"
             value={health?.today?.autonomous_actions || 0}
-            color="text-purple-600"
+            color="text-green-700"
           />
           <StatCard
             icon="trend-up"
@@ -285,33 +286,33 @@ function AgentDashboard() {
                 />
                 <ReferenceLine
                   y={60}
-                  stroke="#eab308"
+                  stroke={ALERT_TONES.warning}
                   strokeDasharray="4 4"
                   label={{
                     value: 'At Risk',
                     position: 'right',
                     fontSize: 10,
-                    fill: '#eab308'
+                    fill: ALERT_TONES.warning
                   }}
                 />
                 <ReferenceLine
                   y={75}
-                  stroke="#ef4444"
+                  stroke={ALERT_TONES.critical}
                   strokeDasharray="4 4"
                   label={{
                     value: 'Critical',
                     position: 'right',
                     fontSize: 10,
-                    fill: '#ef4444'
+                    fill: ALERT_TONES.critical
                   }}
                 />
                 <Line
                   type="monotone"
                   dataKey="risk"
-                  stroke="#6366f1"
+                  stroke={CHART_GREEN.line}
                   strokeWidth={2.5}
                   dot={false}
-                  activeDot={{ r: 5, fill: '#6366f1' }}
+                  activeDot={{ r: 5, fill: CHART_GREEN.dot }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -424,7 +425,7 @@ function InterventionRow({ intervention }: { intervention: any }) {
     success: 'text-green-600',
     ignored: 'text-gray-400',
     partial: 'text-yellow-600',
-    pending: 'text-blue-600'
+    pending: 'text-green-600'
   };
 
   const interventionType = typeof intervention?.intervention_type === 'string'

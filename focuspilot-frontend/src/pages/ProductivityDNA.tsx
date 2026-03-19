@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import { dnaAPI } from '../api/client';
 import { DNAResult, ClusterProfile, DNAInsight, HeatmapCell, DNAEligibility } from '../types/dna';
 import AppIcon, { IconName } from '../components/AppIcon';
+import { BADGE_GREEN, CHART_GREEN } from '../utils/greenPalette';
 
 const DAYS   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS  = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
@@ -173,9 +174,7 @@ function ProductivityDNA() {
           <button
             onClick={handleTrain}
             disabled={training}
-            className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl
-              font-semibold hover:bg-indigo-700 disabled:bg-gray-400
-              transition text-sm"
+            className="px-5 py-2.5 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 disabled:bg-gray-400 transition text-sm"
           >
             {training ? 'Analyzing...' : 'Retrain DNA'}
           </button>
@@ -220,7 +219,7 @@ function ProductivityDNA() {
             {/* Stats row */}
             <div className="grid grid-cols-3 gap-4 mb-8">
               <div className="bg-white rounded-xl shadow p-5 text-center">
-                <p className="text-3xl font-bold text-indigo-600">
+                <p className={`text-3xl font-bold ${BADGE_GREEN.accent}`}>
                   {dna.n_clusters}
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
@@ -236,7 +235,7 @@ function ProductivityDNA() {
                 </p>
               </div>
               <div className="bg-white rounded-xl shadow p-5 text-center">
-                <p className="text-3xl font-bold text-purple-600">
+                <p className={`text-3xl font-bold ${BADGE_GREEN.text}`}>
                   {dna.best_session_length?.avg_minutes
                     ? `${Math.round(dna.best_session_length.avg_minutes)}m`
                     : '—'
@@ -267,7 +266,7 @@ function ProductivityDNA() {
               </h2>
               <div className="bg-white rounded-xl shadow p-6">
                 <p className="text-sm text-gray-600 mb-4">
-                  Darker blue = better focus quality. Gray cells mean no sessions logged for that slot.
+                  Darker green = better focus quality. Gray cells mean no sessions logged for that slot.
                 </p>
                 <FocusHeatmap heatmapData={dna.heatmap_data || []} />
               </div>
@@ -385,9 +384,7 @@ function NotTrainedState({
       <button
         onClick={onTrain}
         disabled={training}
-        className="px-8 py-3 bg-indigo-600 text-white rounded-xl
-          font-bold text-lg hover:bg-indigo-700
-          disabled:bg-gray-400 transition"
+        className="px-8 py-3 rounded-xl bg-green-600 text-white font-bold text-lg hover:bg-green-700 disabled:bg-gray-400 transition"
       >
         {training ? 'Analyzing your sessions...' : 'Analyze My DNA'}
       </button>
@@ -425,7 +422,7 @@ function NotTrainedState({
         ].map((item, i) => (
           <div key={i} className="text-center">
             <span className="flex justify-center mb-2">
-              <AppIcon name={item.icon} className="text-indigo-600" size={28} />
+              <AppIcon name={item.icon} className={BADGE_GREEN.accent} size={28} />
             </span>
             <p className="text-xs text-gray-500">{item.label}</p>
           </div>
@@ -543,16 +540,16 @@ function FocusHeatmap({ heatmapData }: { heatmapData: HeatmapCell[] }) {
     const normalized = (quality - minQuality) / qualityRange;
 
     if (normalized >= 0.75) {
-      return { backgroundColor: '#3730a3', borderColor: '#312e81' };
+      return { backgroundColor: CHART_GREEN.heatmap[3], borderColor: CHART_GREEN.heatmap[3] };
     }
     if (normalized >= 0.5) {
-      return { backgroundColor: '#4f46e5', borderColor: '#4338ca' };
+      return { backgroundColor: CHART_GREEN.heatmap[2], borderColor: CHART_GREEN.heatmap[2] };
     }
     if (normalized >= 0.25) {
-      return { backgroundColor: '#818cf8', borderColor: '#6366f1' };
+      return { backgroundColor: CHART_GREEN.heatmap[1], borderColor: CHART_GREEN.heatmap[1] };
     }
 
-    return { backgroundColor: '#c7d2fe', borderColor: '#a5b4fc' };
+    return { backgroundColor: CHART_GREEN.heatmap[0], borderColor: CHART_GREEN.heatmap[0] };
   };
 
   return (
@@ -627,7 +624,7 @@ function FocusHeatmap({ heatmapData }: { heatmapData: HeatmapCell[] }) {
           }}
         />
         <span className="text-xs text-gray-500">Less focus</span>
-        {['#c7d2fe', '#818cf8', '#4f46e5', '#3730a3'].map((c, i) => (
+        {CHART_GREEN.heatmap.map((c, i) => (
           <div
             key={i}
             className="w-5 h-5 rounded border"
@@ -643,7 +640,7 @@ function FocusHeatmap({ heatmapData }: { heatmapData: HeatmapCell[] }) {
 function InsightCard({ insight }: { insight: DNAInsight }) {
   const config = {
     success: { bg: 'bg-green-50  border-green-200',  text: 'text-green-800'  },
-    info:    { bg: 'bg-blue-50   border-blue-200',   text: 'text-blue-800'   },
+    info:    { bg: 'bg-green-50  border-green-200',  text: 'text-green-800'  },
     warning: { bg: 'bg-yellow-50 border-yellow-200', text: 'text-yellow-800' }
   };
 
@@ -710,7 +707,7 @@ function PeakHourRow({
   return (
     <div className="bg-white rounded-xl border border-gray-100
       shadow-sm p-4 flex items-center gap-4">
-      <AppIcon name={medals[rank - 1] || 'clock'} className="text-indigo-600" size={22} />
+      <AppIcon name={medals[rank - 1] || 'clock'} className={BADGE_GREEN.accent} size={22} />
       <div className="flex-1">
         <p className="font-bold text-gray-900 text-sm">
           {peakHour.hour_label}
@@ -720,7 +717,7 @@ function PeakHourRow({
         </p>
       </div>
       <div className="text-right">
-        <p className="text-lg font-bold text-indigo-600">
+        <p className={`text-lg font-bold ${BADGE_GREEN.accent}`}>
           {peakHour.quality}
         </p>
         <p className="text-xs text-gray-400">quality</p>

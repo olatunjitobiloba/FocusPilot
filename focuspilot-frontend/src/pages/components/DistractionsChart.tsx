@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { api } from '../../api/client';
+import { CHART_GREEN } from '../../utils/greenPalette';
 
 function DistractionsChart() {
   const [data, setData] = useState<any[]>([]);
@@ -30,7 +31,7 @@ function DistractionsChart() {
     }
   };
 
-  const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+  const COLORS = CHART_GREEN.series;
 
   if (loading) {
     return <div className="text-center py-8">Loading chart...</div>;
@@ -55,7 +56,7 @@ function DistractionsChart() {
             labelLine={false}
             label={({ name, percent }) => `${name} (${((percent ?? 0) * 100).toFixed(0)}%)`}
             outerRadius={80}
-            fill="#8884d8"
+            fill={CHART_GREEN.bar}
             dataKey="value"
           >
             {data.map((entry, index) => (

@@ -291,7 +291,7 @@ function Blocklist() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowAddProductiveModal(true)}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+              className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition"
             >
               + Mark Productive
             </button>
@@ -326,8 +326,8 @@ function Blocklist() {
         </div>
 
         {whitelist.length > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <p className="text-blue-800 text-sm">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <p className="text-green-800 text-sm">
               <strong>Productive Whitelist:</strong> {whitelist.map((item) => item.domain).join(', ')}
             </p>
           </div>
@@ -459,7 +459,7 @@ function Blocklist() {
                 </p>
                 <button
                   onClick={() => setShowAddProductiveModal(true)}
-                  className="mt-6 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+                  className="mt-6 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition"
                 >
                   + Add Productive Site
                 </button>
@@ -469,7 +469,7 @@ function Blocklist() {
                 <div className="flex justify-end">
                   <button
                     onClick={() => setShowAddProductiveModal(true)}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition"
                   >
                     + Add Productive Site
                   </button>

@@ -9,18 +9,18 @@ const ACTION_CONFIG: Record<string, {
 }> = {
 	block_sites: { icon: 'lock', color: 'text-red-600', label: 'Sites Blocked' },
 	unblock_sites: { icon: 'unlock', color: 'text-green-600', label: 'Sites Unblocked' },
-	start_session: { icon: 'play', color: 'text-blue-600', label: 'Session Started' },
+	start_session: { icon: 'play', color: 'text-green-600', label: 'Session Started' },
 	end_session: { icon: 'stop', color: 'text-orange-600', label: 'Session Ended' },
-	send_nudge: { icon: 'megaphone', color: 'text-purple-600', label: 'Nudge Sent' },
+	send_nudge: { icon: 'megaphone', color: 'text-green-700', label: 'Nudge Sent' },
 	schedule_nudge: { icon: 'clock', color: 'text-yellow-600', label: 'Nudge Scheduled' },
-	activate_focus_mode: { icon: 'target', color: 'text-indigo-600', label: 'Focus Mode' }
+	activate_focus_mode: { icon: 'target', color: 'text-green-600', label: 'Focus Mode' }
 };
 
 const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
 	completed: { color: 'bg-green-100  text-green-700', label: 'Completed' },
 	failed: { color: 'bg-red-100    text-red-700', label: 'Failed' },
 	undone: { color: 'bg-gray-100   text-gray-600', label: 'Undone' },
-	executing: { color: 'bg-blue-100   text-blue-700', label: 'Running' },
+	executing: { color: 'bg-green-100 text-green-700', label: 'Running' },
 	pending: { color: 'bg-yellow-100 text-yellow-700', label: 'Pending' }
 };
 
@@ -265,7 +265,7 @@ function ActionCard({
 									</span>
 								)}
 								{action.action_data.duration_minutes && (
-									<span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded">
+									<span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded">
 										{action.action_data.duration_minutes} minutes
 									</span>
 								)}

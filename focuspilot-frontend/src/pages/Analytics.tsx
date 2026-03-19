@@ -21,6 +21,7 @@ import {
   SessionRow,
   WeeklyReport,
 } from '../types/analytics';
+import { ALERT_TONES, BADGE_GREEN, CHART_GREEN } from '../utils/greenPalette';
 
 const RANGE_OPTIONS = [
   { label: '7 days', value: 7 },
@@ -173,7 +174,7 @@ function Analytics() {
               <SummaryCard
                 label="Focused Hours"
                 value={`${summary.total_focused_hours || 0}h`}
-                color="text-blue-600"
+                color="text-green-600"
                 sub={`${summary.total_sessions || 0} sessions`}
               />
               <SummaryCard
@@ -197,7 +198,7 @@ function Analytics() {
               <SummaryCard
                 label="Peak Hour"
                 value={overview?.best_hour?.hour_label || '-'}
-                color="text-indigo-600"
+                color="text-green-700"
                 sub={`Avg score: ${overview?.best_hour?.avg_score || 0}`}
               />
               <SummaryCard
@@ -292,7 +293,7 @@ function DailyFocusChart({ data }: { data: DailyBreakdown[] }) {
             fontSize: '12px',
           }}
         />
-        <Bar dataKey="avg_score" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="avg_score" fill={CHART_GREEN.bar} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -330,7 +331,7 @@ function RiskTrendChart({ data }: { data: RiskTrendPoint[] }) {
         <Line
           type="monotone"
           dataKey="risk_pct"
-          stroke="#ef4444"
+          stroke={ALERT_TONES.critical}
           strokeWidth={2}
           dot={false}
           activeDot={{ r: 4 }}
@@ -488,7 +489,7 @@ function SessionHistoryTable({ sessions }: { sessions: SessionRow[] }) {
               </td>
               <td className="px-6 py-3">
                 {s.auto_started ? (
-                  <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-600">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${BADGE_GREEN.bg} ${BADGE_GREEN.accent}`}>
                     Auto
                   </span>
                 ) : (
@@ -621,7 +622,7 @@ function WeeklyReportView({ report }: { report: WeeklyReport }) {
         <div className="space-y-3">
           {(report.recommendations || []).map((rec, i) => (
             <div key={i} className="flex items-start gap-3 border-b border-gray-50 py-2 last:border-0">
-              <span className="mt-0.5 shrink-0 text-sm font-bold text-indigo-500">{i + 1}.</span>
+              <span className={`mt-0.5 shrink-0 text-sm font-bold ${BADGE_GREEN.accent}`}>{i + 1}.</span>
               <p className="text-sm leading-relaxed text-gray-700">{rec}</p>
             </div>
           ))}
