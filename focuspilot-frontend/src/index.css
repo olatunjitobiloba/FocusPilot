@@ -68,7 +68,14 @@ body {
 	color: var(--fp-text) !important;
 }
 
-.text-gray-700,
+.text-gray-800 {
+	color: var(--fp-text) !important;
+}
+
+.text-gray-700 {
+	color: var(--fp-text) !important;
+}
+
 .text-gray-600,
 .text-gray-500,
 .text-gray-400 {
