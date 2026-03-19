@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import {
   LineChart,
@@ -163,11 +163,7 @@ function InterventionHistory() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'history' | 'learning' | 'policy'>('history');
 
-  useEffect(() => {
-    loadAll();
-  }, []);
-
-  const normalizeLearningStats = (raw: unknown): LearningStats => {
+  const normalizeLearningStats = useCallback((raw: unknown): LearningStats => {
     const source = raw && typeof raw === 'object' ? (raw as Partial<LearningStats>) : {};
     const actionCounts =
       source.action_counts && typeof source.action_counts === 'object'
@@ -198,9 +194,9 @@ function InterventionHistory() {
       action_counts: actionCounts,
       reward_trend: rewardTrend
     };
-  };
+  }, []);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const [epRes, statsRes, policyRes] = await Promise.all([
@@ -216,7 +212,11 @@ function InterventionHistory() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [normalizeLearningStats]);
+
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
 
   if (loading) {
     return (
