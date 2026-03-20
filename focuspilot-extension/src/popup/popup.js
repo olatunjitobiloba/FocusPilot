@@ -569,6 +569,13 @@ function displayRiskScore(risk) {
   const container = document.getElementById('risk-container');
   if (!container) return;
 
+  const styles = {
+    surface: '#162236',
+    border: '#2a3c57',
+    muted: '#a8b8cb',
+    text: '#ecf3fb'
+  };
+
   const colors = {
     low: '#22c55e',
     medium: '#eab308',
@@ -594,11 +601,10 @@ function displayRiskScore(risk) {
 
   container.innerHTML = `
     <div style="
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
+      background: ${styles.surface};
+      border: 1px solid ${styles.border};
       border-radius: 8px;
       padding: 12px;
-      margin-top: 12px;
     ">
       <div style="
         display: flex;
@@ -606,7 +612,7 @@ function displayRiskScore(risk) {
         align-items: center;
         margin-bottom: 8px;
       ">
-        <span style="font-size: 13px; font-weight: 600; color: #374151;">
+        <span style="font-size: 13px; font-weight: 600; color: ${styles.text};">
           ${icon} Procrastination Risk
         </span>
         <span style="font-size: 18px; font-weight: 700; color: ${color};">
@@ -616,7 +622,7 @@ function displayRiskScore(risk) {
 
       <div style="
         width: 100%;
-        background: #e5e7eb;
+        background: #23354f;
         border-radius: 9999px;
         height: 8px;
         margin-bottom: 6px;
@@ -636,9 +642,9 @@ function displayRiskScore(risk) {
       </p>
 
       ${topFactors.length > 0 ? `
-        <div style="margin-top: 8px; border-top: 1px solid #e5e7eb; padding-top: 8px;">
+        <div style="margin-top: 8px; border-top: 1px solid ${styles.border}; padding-top: 8px;">
           ${topFactors.slice(0, 2).map((f) => `
-            <p style="font-size: 11px; color: #6b7280; margin-bottom: 3px;">
+            <p style="font-size: 11px; color: ${styles.muted}; margin-bottom: 3px;">
               ${f.factor}
             </p>
           `).join('')}
