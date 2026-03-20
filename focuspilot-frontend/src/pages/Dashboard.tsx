@@ -68,7 +68,7 @@ const DASHBOARD_CACHE_KEY = 'focuspilot_dashboard_cache_v1';
 // ── SMALL COMPONENTS ──────────────────────────────────────────────
 function StatCard({ icon, label, value, sub }: { icon: string; label: string; value: string; sub?: string }) {
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col gap-1">
+    <div className="bg-white rounded-2xl p-6 sm:p-5 shadow-sm border border-gray-100 flex flex-col gap-2">
       <span className="text-2xl">{icon}</span>
       <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{label}</p>
       <p className="text-2xl font-bold text-gray-800">{value}</p>
@@ -80,7 +80,7 @@ function StatCard({ icon, label, value, sub }: { icon: string; label: string; va
 function SessionCard({ session }: { session: Session }) {
   const perfect = session.distractions === 0;
   return (
-    <div className="flex items-center justify-between bg-white rounded-xl px-5 py-4 shadow-sm border border-gray-100">
+    <div className="flex items-center justify-between bg-white rounded-xl px-5 sm:px-5 py-5 sm:py-4 shadow-sm border border-gray-100">
       <div>
         <p className="text-sm font-semibold text-gray-700">{session.date}</p>
         <p className="text-xs text-gray-400 mt-0.5">
@@ -89,7 +89,7 @@ function SessionCard({ session }: { session: Session }) {
         </p>
       </div>
       <span
-        className={`text-xs font-semibold px-3 py-1 rounded-full ${
+        className={`text-xs font-semibold px-3 py-2 sm:py-1 rounded-full whitespace-nowrap ml-2 ${
           perfect ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'
         }`}
       >
@@ -526,8 +526,8 @@ export default function Dashboard() {
             {stats && (
               <>
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <div className="col-span-2 md:col-span-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="col-span-1 sm:col-span-2 lg:col-span-4">
                 <BlockStateWidget />
               </div>
               <StatCard

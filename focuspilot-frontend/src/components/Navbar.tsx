@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 function BrainIcon({ className }: { className?: string }) {
@@ -39,6 +39,11 @@ function safeParseUser(raw: string | null) {
 function Navbar() {
   const location = useLocation();
   const activeTab = new URLSearchParams(location.search).get('tab');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setIsMenuOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -59,134 +64,40 @@ function Navbar() {
     );
   }, [location.pathname]);
 
-  const getDashboardClass = () =>
-    location.pathname === '/dashboard' && activeTab !== 'sessions'
-      ? 'text-green-600 border-b-2 border-green-600'
-      : 'text-gray-600 hover:text-gray-900';
-
-  const getBlocklistClass = () =>
-    location.pathname === '/blocklist'
-      ? 'text-green-600 border-b-2 border-green-600'
-      : 'text-gray-600 hover:text-gray-900';
-
-  const getSessionsClass = () =>
-    location.pathname === '/dashboard' && activeTab === 'sessions'
-      ? 'text-green-600 border-b-2 border-green-600'
-      : 'text-gray-600 hover:text-gray-900';
-
-  const getSettingsClass = () =>
-    location.pathname === '/settings'
-      ? 'text-green-600 border-b-2 border-green-600'
-      : 'text-gray-600 hover:text-gray-900';
-
-  const getAgentClass = () =>
-    location.pathname === '/agent'
-      ? 'text-green-600 border-b-2 border-green-600'
-      : 'text-gray-600 hover:text-gray-900';
-
-  const getAgentDashboardClass = () =>
-    location.pathname === '/agent-dashboard'
-      ? 'text-green-600 border-b-2 border-green-600'
-      : 'text-gray-600 hover:text-gray-900';
-
-  const getExecutionClass = () =>
-    location.pathname === '/execution'
-      ? 'text-green-600 border-b-2 border-green-600'
-      : 'text-gray-600 hover:text-gray-900';
-
-  const getDNAClass = () =>
-    location.pathname === '/dna'
-      ? 'text-green-600 border-b-2 border-green-600'
-      : 'text-gray-600 hover:text-gray-900';
-
-  const getAnalyticsClass = () =>
-    location.pathname === '/analytics'
-      ? 'text-green-600 border-b-2 border-green-600'
-      : 'text-gray-600 hover:text-gray-900';
-
-  const getInterventionsClass = () =>
-    location.pathname === '/interventions'
-      ? 'text-green-600 border-b-2 border-green-600'
-      : 'text-gray-600 hover:text-gray-900';
-
   const user = safeParseUser(localStorage.getItem('user')) || {};
+
+  const navLinkClasses = (isActive: boolean) =>
+    `font-medium text-sm py-2 px-4 lg:px-0 lg:pb-1 block lg:inline transition ${
+      isActive
+        ? 'text-green-600 border-l-4 lg:border-l-0 lg:border-b-2 border-green-600 bg-green-50 lg:bg-transparent'
+        : 'text-gray-600 hover:text-gray-900'
+    }`;
 
   return (
     <nav className="bg-white shadow sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex flex-wrap lg:flex-nowrap justify-between items-center gap-y-2 py-2 lg:py-0 lg:h-16">
+        {/* Desktop and Mobile header row */}
+        <div className="flex justify-between items-center h-16">
+          {/* Logo */}
           <Link to="/dashboard" className="text-xl font-bold text-green-600 shrink-0">
             FocusPilot
           </Link>
 
-          <div className="order-3 lg:order-2 w-full lg:w-auto overflow-x-auto fp-scroll-x">
-            <div className="flex items-center gap-4 sm:gap-6 min-w-max pb-1 lg:pb-0">
-            <Link
-              to="/dashboard"
-              className={`font-medium text-sm pb-1 transition ${getDashboardClass()}`}
-            >
-              Dashboard
-            </Link>
-            <Link
-              to="/blocklist"
-              className={`font-medium text-sm pb-1 transition ${getBlocklistClass()}`}
-            >
-              Blocklist
-            </Link>
-            <Link
-              to="/dashboard?tab=sessions"
-              className={`font-medium text-sm pb-1 transition ${getSessionsClass()}`}
-            >
-              Sessions
-            </Link>
-            <Link
-              to="/settings"
-              className={`font-medium text-sm pb-1 transition ${getSettingsClass()}`}
-            >
-              Settings
-            </Link>
-            <Link
-              to="/agent"
-              className={`font-medium text-sm pb-1 transition ${getAgentClass()}`}
-            >
-              Agent
-            </Link>
-            <Link
-              to="/agent-dashboard"
-              className={`font-medium text-sm pb-1 transition ${getAgentDashboardClass()}`}
-            >
-              Agent Dashboard
-            </Link>
-            <Link
-              to="/execution"
-              className={`font-medium text-sm pb-1 transition ${getExecutionClass()}`}
-            >
-              Actions
-            </Link>
-            <Link
-              to="/dna"
-              className={`font-medium text-sm pb-1 transition ${getDNAClass()}`}
-            >
-              DNA
-            </Link>
-            <Link
-              to="/analytics"
-              className={`font-medium text-sm pb-1 transition ${getAnalyticsClass()}`}
-            >
-              Analytics
-            </Link>
-            <Link
-              to="/interventions"
-              className={`font-medium text-sm pb-1 transition inline-flex items-center gap-1.5 ${getInterventionsClass()}`}
-            >
-              <BrainIcon className="h-4 w-4" />
-              <span>Interventions</span>
-            </Link>
-            </div>
-          </div>
+          {/* Hamburger menu button - visible on mobile */}
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition"
+            aria-label="Toggle menu"
+            aria-expanded={isMenuOpen}
+          >
+            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isMenuOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} />
+            </svg>
+          </button>
 
-          <div className="order-2 lg:order-3 flex items-center gap-3 ml-auto lg:ml-0">
-            <span className="hidden sm:inline text-sm text-gray-600 truncate max-w-[180px]">{user.full_name}</span>
+          {/* Right section - user info and logout */}
+          <div className="hidden lg:flex items-center gap-3 ml-auto">
+            <span className="text-sm text-gray-600 truncate max-w-[180px]">{user.full_name}</span>
             <button
               onClick={() => {
                 localStorage.clear();
@@ -198,6 +109,152 @@ function Navbar() {
             </button>
           </div>
         </div>
+
+        {/* Desktop Navigation - visible on lg and up */}
+        <div className="hidden lg:flex items-center gap-4 border-t border-gray-100">
+          <Link
+            to="/dashboard"
+            className={navLinkClasses(location.pathname === '/dashboard' && activeTab !== 'sessions')}
+          >
+            Dashboard
+          </Link>
+          <Link
+            to="/blocklist"
+            className={navLinkClasses(location.pathname === '/blocklist')}
+          >
+            Blocklist
+          </Link>
+          <Link
+            to="/dashboard?tab=sessions"
+            className={navLinkClasses(location.pathname === '/dashboard' && activeTab === 'sessions')}
+          >
+            Sessions
+          </Link>
+          <Link
+            to="/settings"
+            className={navLinkClasses(location.pathname === '/settings')}
+          >
+            Settings
+          </Link>
+          <Link
+            to="/agent"
+            className={navLinkClasses(location.pathname === '/agent')}
+          >
+            Agent
+          </Link>
+          <Link
+            to="/agent-dashboard"
+            className={navLinkClasses(location.pathname === '/agent-dashboard')}
+          >
+            Agent Dashboard
+          </Link>
+          <Link
+            to="/execution"
+            className={navLinkClasses(location.pathname === '/execution')}
+          >
+            Actions
+          </Link>
+          <Link
+            to="/dna"
+            className={navLinkClasses(location.pathname === '/dna')}
+          >
+            DNA
+          </Link>
+          <Link
+            to="/analytics"
+            className={navLinkClasses(location.pathname === '/analytics')}
+          >
+            Analytics
+          </Link>
+          <Link
+            to="/interventions"
+            className={`${navLinkClasses(location.pathname === '/interventions')} inline-flex items-center gap-1.5`}
+          >
+            <BrainIcon className="h-4 w-4" />
+            <span>Interventions</span>
+          </Link>
+        </div>
+
+        {/* Mobile Navigation - visible on small screens */}
+        {isMenuOpen && (
+          <div className="lg:hidden border-t border-gray-100 py-2">
+            <Link
+              to="/dashboard"
+              className={navLinkClasses(location.pathname === '/dashboard' && activeTab !== 'sessions')}
+            >
+              Dashboard
+            </Link>
+            <Link
+              to="/blocklist"
+              className={navLinkClasses(location.pathname === '/blocklist')}
+            >
+              Blocklist
+            </Link>
+            <Link
+              to="/dashboard?tab=sessions"
+              className={navLinkClasses(location.pathname === '/dashboard' && activeTab === 'sessions')}
+            >
+              Sessions
+            </Link>
+            <Link
+              to="/settings"
+              className={navLinkClasses(location.pathname === '/settings')}
+            >
+              Settings
+            </Link>
+            <Link
+              to="/agent"
+              className={navLinkClasses(location.pathname === '/agent')}
+            >
+              Agent
+            </Link>
+            <Link
+              to="/agent-dashboard"
+              className={navLinkClasses(location.pathname === '/agent-dashboard')}
+            >
+              Agent Dashboard
+            </Link>
+            <Link
+              to="/execution"
+              className={navLinkClasses(location.pathname === '/execution')}
+            >
+              Actions
+            </Link>
+            <Link
+              to="/dna"
+              className={navLinkClasses(location.pathname === '/dna')}
+            >
+              DNA
+            </Link>
+            <Link
+              to="/analytics"
+              className={navLinkClasses(location.pathname === '/analytics')}
+            >
+              Analytics
+            </Link>
+            <Link
+              to="/interventions"
+              className={`${navLinkClasses(location.pathname === '/interventions')} inline-flex items-center gap-1.5`}
+            >
+              <BrainIcon className="h-4 w-4" />
+              <span>Interventions</span>
+            </Link>
+
+            {/* Mobile user info and logout */}
+            <div className="flex flex-col gap-3 border-t border-gray-100 mt-3 pt-3">
+              <span className="text-sm text-gray-600 px-4">{user.full_name}</span>
+              <button
+                onClick={() => {
+                  localStorage.clear();
+                  window.location.href = '/login';
+                }}
+                className="text-sm text-gray-500 hover:text-red-600 transition px-4 py-2 text-left"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </nav>
   );

@@ -161,7 +161,7 @@ function Settings() {
             title="Agent Sensitivity"
             description="How aggressively the agent intervenes when it detects procrastination"
           >
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               {(['low', 'medium', 'high'] as const).map(level => (
                 <button
                   key={level}
@@ -204,7 +204,7 @@ function Settings() {
             title="Default Session Duration"
             description="How long each focus session lasts by default"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
               <input
                 type="range"
                 min={10}
@@ -212,9 +212,9 @@ function Settings() {
                 step={5}
                 value={settings.session_duration_mins}
                 onChange={e => update('session_duration_mins', Number(e.target.value))}
-                className="w-40"
+                className="flex-1 sm:flex-none sm:w-40"
               />
-              <span className="font-semibold text-gray-900 w-16">
+              <span className="font-semibold text-gray-900 whitespace-nowrap">
                 {settings.session_duration_mins} min
               </span>
             </div>
@@ -225,7 +225,7 @@ function Settings() {
             title="Break Duration"
             description="How long breaks last between sessions"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
               <input
                 type="range"
                 min={5}
@@ -233,9 +233,9 @@ function Settings() {
                 step={5}
                 value={settings.break_duration_mins}
                 onChange={e => update('break_duration_mins', Number(e.target.value))}
-                className="w-40"
+                className="flex-1 sm:flex-none sm:w-40"
               />
-              <span className="font-semibold text-gray-900 w-16">
+              <span className="font-semibold text-gray-900 whitespace-nowrap">
                 {settings.break_duration_mins} min
               </span>
             </div>
@@ -246,7 +246,7 @@ function Settings() {
             title="Daily Focus Goal"
             description="Target focus hours per day"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
               <input
                 type="range"
                 min={1}
@@ -254,9 +254,9 @@ function Settings() {
                 step={0.5}
                 value={settings.daily_goal_hours}
                 onChange={e => update('daily_goal_hours', Number(e.target.value))}
-                className="w-40"
+                className="flex-1 sm:flex-none sm:w-40"
               />
-              <span className="font-semibold text-gray-900 w-16">
+              <span className="font-semibold text-gray-900 whitespace-nowrap">
                 {settings.daily_goal_hours}h
               </span>
             </div>
@@ -283,13 +283,13 @@ function Settings() {
             title="Quiet Hours"
             description="No notifications during these hours"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">From</label>
                 <select
                   value={settings.quiet_hours_start}
                   onChange={e => update('quiet_hours_start', Number(e.target.value))}
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full sm:w-auto"
                 >
                   {Array.from({ length: 24 }, (_, i) => (
                     <option key={i} value={i}>
@@ -298,13 +298,13 @@ function Settings() {
                   ))}
                 </select>
               </div>
-              <span className="text-gray-500 mt-4">to</span>
+              <span className="text-gray-500 sm:mt-4">to</span>
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Until</label>
                 <select
                   value={settings.quiet_hours_end}
                   onChange={e => update('quiet_hours_end', Number(e.target.value))}
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full sm:w-auto"
                 >
                   {Array.from({ length: 24 }, (_, i) => (
                     <option key={i} value={i}>
@@ -324,7 +324,7 @@ function Settings() {
             title="Theme"
             description="Choose your preferred color theme"
           >
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               {(['light', 'dark', 'system'] as const).map(theme => (
                 <button
                   key={theme}
@@ -369,7 +369,7 @@ function SettingsSection({
 }) {
   return (
     <div className="bg-white rounded-lg shadow mb-6">
-      <div className="px-6 py-4 border-b border-gray-100">
+      <div className="px-5 sm:px-6 py-4 sm:py-4 border-b border-gray-100">
         <h2 className="text-lg font-bold text-gray-900">{title}</h2>
       </div>
       <div className="divide-y divide-gray-100">{children}</div>
@@ -387,7 +387,7 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="px-5 sm:px-6 py-6 sm:py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6">
       <div className="flex-1">
         <p className="font-semibold text-gray-900">{title}</p>
         <p className="text-sm text-gray-500 mt-0.5">{description}</p>
