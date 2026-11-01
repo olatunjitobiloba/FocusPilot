@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS agent_events (
     risk_score NUMERIC,
     signals JSONB,
     state_before TEXT,
+    state_after TEXT,
     cycle INTEGER,
     actions JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -273,26 +274,36 @@ $$ LANGUAGE plpgsql;
 -- ==============================================================================
 -- Row Level Security (RLS) Configuration
 -- ==============================================================================
--- Disable RLS by default so your FastAPI backend (using service/anon key)
--- has unobstructed access across all endpoints.
-ALTER TABLE users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE user_settings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE focus_sessions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE browsing_activity DISABLE ROW LEVEL SECURITY;
-ALTER TABLE blocklist DISABLE ROW LEVEL SECURITY;
-ALTER TABLE site_block_state DISABLE ROW LEVEL SECURITY;
-ALTER TABLE suggestion_feedback DISABLE ROW LEVEL SECURITY;
-ALTER TABLE agent_state DISABLE ROW LEVEL SECURITY;
-ALTER TABLE agent_actions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE agent_events DISABLE ROW LEVEL SECURITY;
-ALTER TABLE agent_interventions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE intervention_outcomes DISABLE ROW LEVEL SECURITY;
-ALTER TABLE notification_queue DISABLE ROW LEVEL SECURITY;
-ALTER TABLE scheduled_actions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE risk_history DISABLE ROW LEVEL SECURITY;
-ALTER TABLE user_behavior_profile DISABLE ROW LEVEL SECURITY;
-ALTER TABLE productivity_clusters DISABLE ROW LEVEL SECURITY;
-ALTER TABLE session_clusters DISABLE ROW LEVEL SECURITY;
-ALTER TABLE rl_episodes DISABLE ROW LEVEL SECURITY;
-ALTER TABLE q_table DISABLE ROW LEVEL SECURITY;
+-- Enable RLS across all tables and provide operational policies for FastAPI backend & anon/authenticated access
+
+DO $$
+DECLARE
+    pol RECORD;
+    t text;
+    tables text[] := ARRAY[
+        'users', 'user_settings', 'focus_sessions', 'browsing_activity', 
+        'blocklist', 'site_block_state', 'suggestion_feedback', 'agent_state', 
+        'agent_actions', 'agent_events', 'agent_interventions', 'intervention_outcomes', 
+        'notification_queue', 'scheduled_actions', 'risk_history', 'user_behavior_profile', 
+        'productivity_clusters', 'session_clusters', 'rl_episodes', 'q_table'
+    ];
+BEGIN
+    FOREACH t IN ARRAY tables LOOP
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t) THEN
+            EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', t);
+            
+            FOR pol IN (SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = t) LOOP
+                EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', pol.policyname, t);
+            END LOOP;
+
+            EXECUTE format(
+                'CREATE POLICY %I ON public.%I FOR ALL TO anon, authenticated, service_role USING (true) WITH CHECK (true);',
+                'fp_access_' || t,
+                t
+            );
+        END IF;
+    END LOOP;
+END $$;
+
+
 
