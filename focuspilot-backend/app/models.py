@@ -1,5 +1,6 @@
 # app/models.py
-from pydantic import BaseModel, EmailStr, Field
+import re
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
 
@@ -8,6 +9,15 @@ class UserSignup(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128, description="Password must be between 8 and 128 characters")
     full_name: str = Field(..., min_length=2, max_length=100, description="Full name must be between 2 and 100 characters")
+
+    @field_validator("full_name")
+    @classmethod
+    def sanitize_full_name(cls, v: str) -> str:
+        # Strip all HTML tags to prevent stored XSS
+        cleaned = re.sub(r'<[^>]*?>', '', v).strip()
+        if len(cleaned) < 2:
+            raise ValueError("Full name must contain at least 2 valid non-HTML characters")
+        return cleaned
 
 class UserLogin(BaseModel):
     email: EmailStr
