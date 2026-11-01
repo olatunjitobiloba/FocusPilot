@@ -7,6 +7,9 @@ from app.domain_whitelist import is_whitelisted_domain, filter_activities_by_dom
 from datetime import datetime, timezone
 from collections import defaultdict
 import uuid
+import threading
+
+_user_locks = defaultdict(threading.Lock)
 
 router = APIRouter(prefix="/sessions", tags=["Sessions"])
 security = HTTPBearer()
@@ -89,54 +92,61 @@ def start_session(
     session_data: SessionStart,
     user_id: str = Depends(get_current_user_id)
 ):
-    """Start a new focus session"""
-    # Check for active session(s)
-    active = run_db(
-        lambda supabase: supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute(),
-        "Database unavailable while starting session"
-    )
+    """Start a new focus session with concurrency lock"""
+    with _user_locks[user_id]:
+        # Check for active session(s)
+        active = run_db(
+            lambda supabase: supabase.table('focus_sessions').select("*").eq('user_id', user_id).is_('end_time', 'null').execute(),
+            "Database unavailable while starting session"
+        )
 
-    if active.data:
-        newest_active, stale_sessions = get_newest_active_session(active.data)
+        if active.data:
+            newest_active, stale_sessions = get_newest_active_session(active.data)
 
-        # Self-heal old duplicate active sessions if they exist
-        if stale_sessions:
-            now_iso = datetime.now(timezone.utc).isoformat()
-            for stale_session in stale_sessions:
-                stale_duration = get_elapsed_minutes_from_start(stale_session.get('start_time'))
-                run_db(
-                    lambda supabase: supabase.table('focus_sessions').update({
-                        'end_time': now_iso,
-                        'duration_minutes': stale_duration,
-                        'focus_score': stale_session.get('focus_score') or 0,
-                        'distraction_count': stale_session.get('distraction_count') or 0
-                    }).eq('id', stale_session['id']).execute(),
-                    "Database unavailable while cleaning duplicate active sessions"
-                )
+            # Self-heal old duplicate active sessions if they exist
+            if stale_sessions:
+                now_iso = datetime.now(timezone.utc).isoformat()
+                for stale_session in stale_sessions:
+                    stale_duration = get_elapsed_minutes_from_start(stale_session.get('start_time'))
+                    run_db(
+                        lambda supabase: supabase.table('focus_sessions').update({
+                            'end_time': now_iso,
+                            'duration_minutes': stale_duration,
+                            'focus_score': stale_session.get('focus_score') or 0,
+                            'distraction_count': stale_session.get('distraction_count') or 0
+                        }).eq('id', stale_session['id']).execute(),
+                        "Database unavailable while cleaning duplicate active sessions"
+                    )
 
-        raise HTTPException(status_code=400, detail="Active session already exists")
+            raise HTTPException(status_code=400, detail="Active session already exists")
 
-    # Create session
-    session_id = str(uuid.uuid4())
-    result = run_db(
-        lambda supabase: supabase.table('focus_sessions').insert({
-            'id': session_id,
-            'user_id': user_id,
-            'start_time': datetime.now(timezone.utc).isoformat(),
-            'distraction_count': 0
-        }).execute(),
-        "Database unavailable while starting session"
-    )
+        # Create session
+        session_id = str(uuid.uuid4())
+        try:
+            result = run_db(
+                lambda supabase: supabase.table('focus_sessions').insert({
+                    'id': session_id,
+                    'user_id': user_id,
+                    'start_time': datetime.now(timezone.utc).isoformat(),
+                    'distraction_count': 0
+                }).execute(),
+                "Database unavailable while starting session"
+            )
+        except HTTPException as e:
+            err_str = str(e.detail).lower()
+            if "duplicate" in err_str or "unique" in err_str or "conflict" in err_str:
+                raise HTTPException(status_code=400, detail="Active session already exists")
+            raise
 
-    return {
-        "message": "Session started",
-        "session": {
-            "id": session_id,
-            "user_id": user_id,
-            "start_time": result.data[0]['start_time'],
-            "distraction_count": 0
+        return {
+            "message": "Session started",
+            "session": {
+                "id": session_id,
+                "user_id": user_id,
+                "start_time": result.data[0]['start_time'],
+                "distraction_count": 0
+            }
         }
-    }
 
 
 @router.post("/end")

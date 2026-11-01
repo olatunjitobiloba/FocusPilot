@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS focus_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_focus_sessions_user_time ON focus_sessions(user_id, start_time DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS unique_active_session_per_user ON focus_sessions (user_id) WHERE end_time IS NULL;
 
 CREATE TABLE IF NOT EXISTS browsing_activity (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
