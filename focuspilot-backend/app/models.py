@@ -6,12 +6,12 @@ from datetime import datetime
 # Authentication models
 class UserSignup(BaseModel):
     email: EmailStr
-    password: str
-    full_name: str
+    password: str = Field(..., min_length=8, max_length=128, description="Password must be between 8 and 128 characters")
+    full_name: str = Field(..., min_length=2, max_length=100, description="Full name must be between 2 and 100 characters")
 
 class UserLogin(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=1, max_length=128)
 
 class Token(BaseModel):
     access_token: str
