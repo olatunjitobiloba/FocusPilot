@@ -688,21 +688,21 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
     : (isRunning ? 'Stay focused. Agent is watching.' : 'Start a cycle plan to begin tracking');
 
   return (
-    <div className={`rounded-2xl p-6 shadow-sm border-2 transition-all ${
+    <div className={`rounded-2xl p-6 sm:p-7 shadow-xl border transition-all duration-300 ${
       isRunning
-        ? 'bg-green-50 border-green-300'
+        ? 'bg-emerald-950/20 border-emerald-500/30'
         : isBreakRunning
-          ? 'bg-green-50 border-green-200'
-        : 'bg-white border-gray-100'
+          ? 'bg-teal-950/20 border-teal-500/30'
+          : 'bg-[#162236] border-[#2A3C57]'
     }`}>
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-base font-bold text-gray-800">
+          <h2 className="text-lg font-bold text-white tracking-tight">
             {phaseLabel}
           </h2>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-xs text-slate-400 mt-0.5">
             {phaseSubLabel}
           </p>
         </div>
@@ -750,7 +750,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
           ? 'bg-gradient-to-b from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 shadow-inner'
           : isBreakRunning
             ? 'bg-gradient-to-b from-teal-500/10 via-teal-500/5 to-transparent border border-teal-500/20 shadow-inner'
-            : 'bg-gray-50/80 border border-gray-100'
+            : 'bg-[#0B1320]/80 border border-[#2A3C57]'
       }`}>
         <div className="relative w-48 h-48 sm:w-52 sm:h-52 flex items-center justify-center">
           <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 200 200">
@@ -759,7 +759,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
               cx="100"
               cy="100"
               r={radius}
-              className="stroke-gray-200/70"
+              className="stroke-[#2A3C57]/70"
               strokeWidth="8"
               fill="transparent"
             />
@@ -794,11 +794,11 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
               {isRunning ? 'FOCUS FLOW' : isBreakRunning ? 'REST BREAK' : 'STANDBY'}
             </span>
             <p className={`text-4xl sm:text-5xl font-mono font-bold tracking-tight ${
-              isRunning ? 'text-gray-900' : isBreakRunning ? 'text-teal-900' : 'text-gray-400'
+              'text-white'
             }`}>
               {formatTime(displayedElapsed)}
             </p>
-            <span className="text-xs text-gray-500 mt-1 font-medium">
+            <span className="text-xs text-slate-400 mt-1 font-medium">
               {isRunning
                 ? `${Math.floor(displayedElapsed / 60)} / ${sessionDurationMins} min`
                 : isBreakRunning
@@ -811,9 +811,9 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
 
       {/* Cycle Controls */}
       {!isRunning && !isBreakRunning && (
-        <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <label htmlFor="cycle-count" className="block text-sm font-semibold text-gray-700 mb-2">
-            How many focus cycles do you want?
+        <div className="mb-5 rounded-xl border border-[#2A3C57] bg-[#0B1320]/60 p-4">
+          <label htmlFor="cycle-count" className="block text-sm font-semibold text-slate-200 mb-2">
+            Focus Cycle Plan
           </label>
           <div className="flex items-center gap-3">
             <input
@@ -823,10 +823,10 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
               max={8}
               value={selectedCycles}
               onChange={(e) => setSelectedCycles(clampCycles(Number(e.target.value)))}
-              className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-20 rounded-lg border border-[#2A3C57] bg-[#162236] px-3 py-2 text-white font-mono text-center font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
-            <p className="text-xs text-gray-500">
-              1 cycle = {sessionDurationMins} min focus + {breakDurationMins} min break
+            <p className="text-xs text-slate-400">
+              1 cycle = {sessionDurationMins}m deep focus + {breakDurationMins}m recovery break
             </p>
           </div>
         </div>
@@ -855,7 +855,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
         <button
           onClick={handleStart}
           disabled={loading}
-          className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-bold py-4 rounded-xl text-lg transition-all shadow-md hover:shadow-lg active:scale-95"
+          className="w-full bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold py-4 rounded-xl text-base transition-all duration-200 shadow-lg shadow-emerald-500/20 active:scale-[0.99] flex items-center justify-center gap-2"
         >
           {loading ? (lastAction === 'end' ? 'Ending...' : 'Starting...') : `Start ${clampCycles(selectedCycles)} Focus Cycle${clampCycles(selectedCycles) > 1 ? 's' : ''}`}
         </button>

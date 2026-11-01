@@ -69,12 +69,12 @@ function Navbar() {
   const navLinkClasses = (isActive: boolean) =>
     `font-medium text-sm py-2 px-4 lg:px-0 lg:pb-1 block lg:inline transition ${
       isActive
-        ? 'text-green-700 bg-green-50 lg:bg-green-50/80 font-semibold rounded-md'
-        : 'text-gray-600 hover:text-gray-900'
+        ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold rounded-md'
+        : 'text-slate-400 hover:text-white hover:bg-white/5'
     }`;
 
   return (
-    <nav className="bg-white shadow sticky top-0 z-40">
+    <nav className="bg-[#0B1320]/95 border-b border-[#2A3C57] backdrop-blur-xl sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4">
         {/* Desktop and Mobile header row */}
         <div className="flex justify-between items-center h-16">

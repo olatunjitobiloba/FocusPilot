@@ -147,7 +147,7 @@ def end_session(
     """End an active focus session"""
     # Get session
     session = run_db(
-        lambda supabase: supabase.table('focus_sessions').select("*").eq('id', session_data.session_id).eq('user_id', user_id).single().execute(),
+        lambda supabase: supabase.table('focus_sessions').select("*").eq('id', session_data.session_id).eq('user_id', user_id).execute(),
         "Database unavailable while ending session"
     )
 
@@ -156,7 +156,7 @@ def end_session(
 
     # Calculate duration safely (fallback to 0 if start_time is malformed)
     end_time = datetime.now(timezone.utc)
-    duration = max(0, int(get_elapsed_seconds_from_start(session.data.get('start_time')) / 60))
+    duration = max(0, int(get_elapsed_seconds_from_start(session.data[0].get('start_time')) / 60))
 
     # Update session
     run_db(
