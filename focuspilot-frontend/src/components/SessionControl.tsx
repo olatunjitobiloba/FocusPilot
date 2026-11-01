@@ -693,16 +693,16 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
         ? 'bg-emerald-950/20 border-emerald-500/30'
         : isBreakRunning
           ? 'bg-teal-950/20 border-teal-500/30'
-          : 'bg-[#162236] border-[#2A3C57]'
+          : 'bg-white border-slate-200 shadow-sm'
     }`}>
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-bold text-white tracking-tight">
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">
             {phaseLabel}
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 mt-0.5">
             {phaseSubLabel}
           </p>
         </div>
@@ -750,7 +750,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
           ? 'bg-gradient-to-b from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 shadow-inner'
           : isBreakRunning
             ? 'bg-gradient-to-b from-teal-500/10 via-teal-500/5 to-transparent border border-teal-500/20 shadow-inner'
-            : 'bg-[#0B1320]/80 border border-[#2A3C57]'
+            : 'bg-slate-50 border border-slate-200 shadow-inner'
       }`}>
         <div className="relative w-48 h-48 sm:w-52 sm:h-52 flex items-center justify-center">
           <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 200 200">
@@ -759,7 +759,7 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
               cx="100"
               cy="100"
               r={radius}
-              className="stroke-[#2A3C57]/70"
+              className="stroke-slate-200"
               strokeWidth="8"
               fill="transparent"
             />
@@ -794,11 +794,11 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
               {isRunning ? 'FOCUS FLOW' : isBreakRunning ? 'REST BREAK' : 'STANDBY'}
             </span>
             <p className={`text-4xl sm:text-5xl font-mono font-bold tracking-tight ${
-              'text-white'
+              'text-slate-900'
             }`}>
               {formatTime(displayedElapsed)}
             </p>
-            <span className="text-xs text-slate-400 mt-1 font-medium">
+            <span className="text-xs text-slate-500 mt-1 font-medium">
               {isRunning
                 ? `${Math.floor(displayedElapsed / 60)} / ${sessionDurationMins} min`
                 : isBreakRunning
@@ -811,8 +811,8 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
 
       {/* Cycle Controls */}
       {!isRunning && !isBreakRunning && (
-        <div className="mb-5 rounded-xl border border-[#2A3C57] bg-[#0B1320]/60 p-4">
-          <label htmlFor="cycle-count" className="block text-sm font-semibold text-slate-200 mb-2">
+        <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <label htmlFor="cycle-count" className="block text-sm font-semibold text-slate-800 mb-2">
             Focus Cycle Plan
           </label>
           <div className="flex items-center gap-3">
@@ -823,9 +823,9 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
               max={8}
               value={selectedCycles}
               onChange={(e) => setSelectedCycles(clampCycles(Number(e.target.value)))}
-              className="w-20 rounded-lg border border-[#2A3C57] bg-[#162236] px-3 py-2 text-white font-mono text-center font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              className="w-20 rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 font-mono text-center font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               1 cycle = {sessionDurationMins}m deep focus + {breakDurationMins}m recovery break
             </p>
           </div>

@@ -3,11 +3,7 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 const THEME_STORAGE_KEY = 'focuspilot-theme';
 
 function resolveSystemTheme(): 'light' | 'dark' {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return 'light';
-  }
-
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return 'light';
 }
 
 export function applyTheme(theme: ThemeMode): 'light' | 'dark' {
@@ -26,7 +22,7 @@ export function getStoredTheme(): ThemeMode {
   if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system') {
     return storedTheme;
   }
-  return 'system';
+  return 'light';
 }
 
 export function storeTheme(theme: ThemeMode): void {

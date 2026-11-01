@@ -67,43 +67,44 @@ function Navbar() {
   const user = safeParseUser(localStorage.getItem('user')) || {};
 
   const navLinkClasses = (isActive: boolean) =>
-    `font-medium text-sm py-2 px-4 lg:px-0 lg:pb-1 block lg:inline transition ${
+    `font-medium text-sm py-2 px-3 rounded-lg transition-all ${
       isActive
-        ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold rounded-md'
-        : 'text-slate-400 hover:text-white hover:bg-white/5'
+        ? 'text-emerald-700 bg-emerald-50 border border-emerald-200/80 font-semibold'
+        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
     }`;
 
   return (
-    <nav className="bg-[#0B1320]/95 border-b border-[#2A3C57] backdrop-blur-xl sticky top-0 z-40">
+    <nav className="bg-white/95 border-b border-slate-200 backdrop-blur-xl sticky top-0 z-40 text-slate-800 shadow-sm">
       <div className="max-w-7xl mx-auto px-4">
         {/* Desktop and Mobile header row */}
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link to="/dashboard" className="text-xl font-bold text-green-600 shrink-0">
-            FocusPilot
+          <Link to="/dashboard" className="text-xl font-bold text-emerald-600 shrink-0 flex items-center gap-2">
+            <BrainIcon className="w-6 h-6 text-emerald-600" />
+            <span>FocusPilot</span>
           </Link>
 
           {/* Hamburger menu button - visible on mobile */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition"
+            className="lg:hidden p-2 hover:bg-slate-100 rounded-lg transition text-slate-700"
             aria-label="Toggle menu"
             aria-expanded={isMenuOpen}
           >
-            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isMenuOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16M4 18h16'} />
             </svg>
           </button>
 
           {/* Right section - user info and logout */}
           <div className="hidden lg:flex items-center gap-3 ml-auto">
-            <span className="text-sm text-gray-600 truncate max-w-[180px]">{user.full_name}</span>
+            <span className="text-sm font-medium text-slate-700 truncate max-w-[180px]">{user.full_name}</span>
             <button
               onClick={() => {
                 localStorage.clear();
                 window.location.href = '/login';
               }}
-              className="text-sm text-gray-500 hover:text-red-600 transition"
+              className="text-sm font-medium text-slate-500 hover:text-rose-600 transition px-2 py-1 rounded"
             >
               Logout
             </button>
@@ -111,7 +112,7 @@ function Navbar() {
         </div>
 
         {/* Desktop Navigation - visible on lg and up */}
-        <div className="hidden lg:flex items-center gap-4 border-t border-gray-100">
+        <div className="hidden lg:flex items-center gap-2 border-t border-slate-100 py-2">
           <Link
             to="/dashboard"
             className={navLinkClasses(location.pathname === '/dashboard' && activeTab !== 'sessions')}
@@ -177,7 +178,7 @@ function Navbar() {
 
         {/* Mobile Navigation - visible on small screens */}
         {isMenuOpen && (
-          <div className="lg:hidden border-t border-gray-100 py-2">
+          <div className="lg:hidden border-t border-slate-200 py-2 space-y-1">
             <Link
               to="/dashboard"
               className={navLinkClasses(location.pathname === '/dashboard' && activeTab !== 'sessions')}
@@ -241,14 +242,14 @@ function Navbar() {
             </Link>
 
             {/* Mobile user info and logout */}
-            <div className="flex flex-col gap-3 border-t border-gray-100 mt-3 pt-3">
-              <span className="text-sm text-gray-600 px-4">{user.full_name}</span>
+            <div className="flex flex-col gap-2 border-t border-slate-200 mt-3 pt-3">
+              <span className="text-sm font-medium text-slate-700 px-3">{user.full_name}</span>
               <button
                 onClick={() => {
                   localStorage.clear();
                   window.location.href = '/login';
                 }}
-                className="text-sm text-gray-500 hover:text-red-600 transition px-4 py-2 text-left"
+                className="text-sm font-medium text-slate-500 hover:text-rose-600 transition px-3 py-1 text-left"
               >
                 Logout
               </button>
