@@ -454,15 +454,15 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
 
         {/* ── TABS ── */}
-        <div className="flex gap-1.5 mb-8 bg-[#0B1320]/80 rounded-xl p-1 border border-[#2A3C57] w-fit backdrop-blur-sm">
+        <div className="flex gap-1.5 mb-8 bg-slate-100 rounded-xl p-1 border border-slate-200/80 w-fit">
           {(['overview', 'insights'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-5 py-2 rounded-lg text-sm font-semibold capitalize transition-all ${
                 activeTab === tab
-                  ? 'bg-emerald-400 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-white text-slate-900 font-bold shadow-sm border border-slate-200/60'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               {tab === 'overview' ? 'Overview' : 'Insights'}
