@@ -69,7 +69,7 @@ function Navbar() {
   const navLinkClasses = (isActive: boolean) =>
     `font-medium text-sm py-2 px-4 lg:px-0 lg:pb-1 block lg:inline transition ${
       isActive
-        ? 'text-green-600 border-l-4 lg:border-l-0 lg:border-b-2 border-green-600 bg-green-50 lg:bg-transparent'
+        ? 'text-green-700 bg-green-50 lg:bg-green-50/80 font-semibold rounded-md'
         : 'text-gray-600 hover:text-gray-900'
     }`;
 

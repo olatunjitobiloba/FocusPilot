@@ -43,3 +43,8 @@ image-1.png
 image.png
 app/ml/scalers/
 focuspilot-backend/app/ml/scalers/
+
+# Antigravity agent rules and workspace customizations
+.agents/
+AGENTS.md
+

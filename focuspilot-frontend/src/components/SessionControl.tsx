@@ -677,6 +677,11 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
   }, [isBreakRunning, isCyclePlanActive, notifyExtension]);
 
   const displayedElapsed = isBreakRunning ? breakElapsed : elapsed;
+  const currentTargetSeconds = Math.max(1, (isBreakRunning ? breakDurationMins : sessionDurationMins) * 60);
+  const progressPercent = Math.min(100, Math.max(0, (displayedElapsed / currentTargetSeconds) * 100));
+  const radius = 84;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (progressPercent / 100) * circumference;
   const phaseLabel = isBreakRunning ? 'Break Time' : (isRunning ? 'Session Active' : 'Focus Session');
   const phaseSubLabel = isBreakRunning
     ? 'Blocked sites are temporarily unblocked.'
@@ -739,21 +744,69 @@ export default function SessionControl({ onSessionEnd }: SessionControlProps) {
         </div>
       )}
 
-      {/* Timer Display */}
-      <div className={`text-center py-6 rounded-xl mb-4 ${
-        isRunning ? 'bg-green-100' : 'bg-gray-50'
+      {/* Timer Display - Dribbble / 21st.dev Radial HUD */}
+      <div className={`relative flex flex-col items-center justify-center py-6 px-4 rounded-2xl mb-5 transition-all duration-300 ${
+        isRunning
+          ? 'bg-gradient-to-b from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 shadow-inner'
+          : isBreakRunning
+            ? 'bg-gradient-to-b from-teal-500/10 via-teal-500/5 to-transparent border border-teal-500/20 shadow-inner'
+            : 'bg-gray-50/80 border border-gray-100'
       }`}>
-        <p className={`text-5xl font-mono font-bold tracking-widest ${
-          isRunning ? 'text-green-600' : isBreakRunning ? 'text-green-500' : 'text-gray-300'
-        }`}>
-          {formatTime(displayedElapsed)}
-        </p>
-        {(isRunning || isBreakRunning) && (
-          <p className={`text-xs mt-2 ${isBreakRunning ? 'text-green-500' : 'text-green-500'}`}>
-            {Math.floor(displayedElapsed / 60)} minute{Math.floor(displayedElapsed / 60) !== 1 ? 's' : ''}
-            {isBreakRunning ? ' on break' : ' focused'}
-          </p>
-        )}
+        <div className="relative w-48 h-48 sm:w-52 sm:h-52 flex items-center justify-center">
+          <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 200 200">
+            {/* Background Track */}
+            <circle
+              cx="100"
+              cy="100"
+              r={radius}
+              className="stroke-gray-200/70"
+              strokeWidth="8"
+              fill="transparent"
+            />
+            {/* Dynamic Progress Arc */}
+            <circle
+              cx="100"
+              cy="100"
+              r={radius}
+              className={`transition-all duration-700 ease-out ${
+                isBreakRunning
+                  ? 'stroke-teal-500'
+                  : isRunning
+                    ? 'stroke-emerald-500'
+                    : 'stroke-gray-300'
+              }`}
+              strokeWidth="8"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              fill="transparent"
+              style={{
+                filter: isRunning ? 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.45))' : undefined
+              }}
+            />
+          </svg>
+
+          {/* Central Digital Readout */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none">
+            <span className={`text-[10px] font-bold tracking-[0.2em] uppercase mb-1 ${
+              isRunning ? 'text-emerald-600 animate-pulse' : isBreakRunning ? 'text-teal-600 animate-pulse' : 'text-gray-400'
+            }`}>
+              {isRunning ? 'FOCUS FLOW' : isBreakRunning ? 'REST BREAK' : 'STANDBY'}
+            </span>
+            <p className={`text-4xl sm:text-5xl font-mono font-bold tracking-tight ${
+              isRunning ? 'text-gray-900' : isBreakRunning ? 'text-teal-900' : 'text-gray-400'
+            }`}>
+              {formatTime(displayedElapsed)}
+            </p>
+            <span className="text-xs text-gray-500 mt-1 font-medium">
+              {isRunning
+                ? `${Math.floor(displayedElapsed / 60)} / ${sessionDurationMins} min`
+                : isBreakRunning
+                  ? `${Math.floor(displayedElapsed / 60)} / ${breakDurationMins} min`
+                  : `${sessionDurationMins}m block`}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Cycle Controls */}

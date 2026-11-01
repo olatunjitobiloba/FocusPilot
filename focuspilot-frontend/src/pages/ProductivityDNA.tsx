@@ -439,8 +439,12 @@ function ClusterCard({ cluster }: { cluster: ClusterProfile }) {
     'text-red-600';
 
   return (
-    <div className="bg-white rounded-xl shadow p-5 border-t-4"
-      style={{ borderColor: cluster.color }}>
+    <div className="relative overflow-hidden bg-white rounded-xl shadow-xs border border-gray-100 p-5 pt-6"
+    >
+      <div
+        className="absolute top-0 left-0 right-0 h-1.5"
+        style={{ backgroundColor: cluster.color }}
+      />
 
       {/* Header */}
       <div className="flex justify-between items-start mb-3">
